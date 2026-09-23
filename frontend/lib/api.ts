@@ -1,6 +1,7 @@
 import type { DealInput, DealResults, SavedDeal, SavedDealSummary, Sensitivity } from "@/lib/types";
 
-export const API_URL = "http://127.0.0.1:8000";
+const configuredUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+export const API_URL = configuredUrl.endsWith("/") ? configuredUrl.slice(0, -1) : configuredUrl;
 
 async function readError(response: Response): Promise<string> {
   try {

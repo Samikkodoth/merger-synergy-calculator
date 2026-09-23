@@ -209,7 +209,10 @@ export default function DealCalculator() {
         )}
 
         {calculation === null ? (
-          <p className="text-body text-ink-soft">Calculating…</p>
+          <p className="text-body text-ink-soft">
+            Loading the calculator. After a quiet period, the first load can take up to a minute while the
+            server wakes up.
+          </p>
         ) : (
           <div className={`space-y-10 transition-opacity duration-200 ${isStale ? "opacity-50" : "opacity-100"}`}>
             <Tombstone dealName={dealName} inputs={calculation.inputs} results={calculation.results} />

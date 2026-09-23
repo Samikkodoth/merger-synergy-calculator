@@ -1,6 +1,6 @@
 # main.py
 # The API: lets other programs (like our website) use the calculator.
-
+import os
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -11,9 +11,12 @@ from calculator import calculate_deal
 app = FastAPI(title="Merger Synergy Calculator API")
 
 # Allow our future Next.js website (at localhost:3000) to call this API
+# Which websites may call this API. Online, this is set on the hosting service.
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[origin.strip().rstrip("/") for origin in ALLOWED_ORIGINS],
     allow_methods=["*"],
     allow_headers=["*"],
 )
