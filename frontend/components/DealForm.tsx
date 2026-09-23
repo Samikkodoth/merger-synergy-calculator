@@ -113,14 +113,48 @@ function buildDealInput(
   return result as DealInput;
 }
 
+function fromApiNumber(value: number, unit: Unit): string {
+  let converted = value;
+  if (unit === "millions") converted = value / 1_000_000;
+  if (unit === "percent") converted = value * 100;
+  return String(Number(converted.toFixed(6)));
+}
+
+function valuesFromInputs(inputs: DealInput): Record<string, string> {
+  const raw = inputs as Record<string, number | number[]>;
+  const values: Record<string, string> = {};
+  for (const section of SECTIONS) {
+    for (const field of section.fields) {
+      values[field.key] = fromApiNumber(raw[field.key] as number, field.unit);
+    }
+  }
+  return values;
+}
+
+function schedulesFromInputs(inputs: DealInput): Record<string, string[]> {
+  const raw = inputs as Record<string, number | number[]>;
+  const schedules: Record<string, string[]> = {};
+  for (const schedule of SCHEDULES) {
+    schedules[schedule.key] = (raw[schedule.key] as number[]).map((value) =>
+      fromApiNumber(value, "percent"),
+    );
+  }
+  return schedules;
+}
+
 type DealFormProps = {
+  initialInputs?: DealInput;
   onCalculate: (inputs: DealInput) => void;
   isLoading: boolean;
 };
 
-export default function DealForm({ onCalculate, isLoading }: DealFormProps) {
-  const [values, setValues] = useState(DEFAULT_VALUES);
-  const [schedules, setSchedules] = useState(DEFAULT_SCHEDULES);
+export default function DealForm({ initialInputs, onCalculate, isLoading }: DealFormProps) {
+  const [values, setValues] = useState(() =>
+    initialInputs ? valuesFromInputs(initialInputs) : DEFAULT_VALUES,
+  );
+  const [schedules, setSchedules] = useState(() =>
+    initialInputs ? schedulesFromInputs(initialInputs) : DEFAULT_SCHEDULES,
+  );
   const [formError, setFormError] = useState("");
 
   function updateValue(key: string, text: string) {

@@ -1,4 +1,4 @@
-import type { DealInput, DealResults } from "@/lib/types";
+import type { DealInput, DealResults, SavedDeal, SavedDealSummary } from "@/lib/types";
 
 export const API_URL = "http://127.0.0.1:8000";
 
@@ -36,4 +36,23 @@ export function calculateDeal(inputs: DealInput) {
     method: "POST",
     body: JSON.stringify(inputs),
   });
+}
+
+export function saveDeal(name: string, inputs: DealInput) {
+  return request<SavedDealSummary>("/deals", {
+    method: "POST",
+    body: JSON.stringify({ name, inputs }),
+  });
+}
+
+export function listDeals() {
+  return request<SavedDealSummary[]>("/deals");
+}
+
+export function getDeal(id: number) {
+  return request<SavedDeal>(`/deals/${id}`);
+}
+
+export function deleteDeal(id: number) {
+  return request<{ deleted: number }>(`/deals/${id}`, { method: "DELETE" });
 }

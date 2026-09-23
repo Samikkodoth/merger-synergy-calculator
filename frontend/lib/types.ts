@@ -38,3 +38,14 @@ export type DealResults = {
   lost_interest_income: number;
   years: YearResult[];
 };
+
+export type SavedDealSummary = {
+  id: number;
+  name: string;
+  created_at: string;
+};
+
+export type SavedDeal = SavedDealSummary & {
+  inputs: DealInput;
+  results: DealResults;
+};
