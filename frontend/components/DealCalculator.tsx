@@ -8,7 +8,8 @@ import Tombstone from "@/components/Tombstone";
 import YearStrip from "@/components/YearStrip";
 import EpsBridge from "@/components/EpsBridge";
 import SynergyTimeline from "@/components/SynergyTimeline";
-import { calculateDeal, deleteDeal, getDeal, listDeals, saveDeal } from "@/lib/api";
+import SensitivityTable from "@/components/SensitivityTable";
+import { calculateDeal, calculateSensitivity, deleteDeal, getDeal, listDeals, saveDeal } from "@/lib/api";
 import {
   DEFAULT_DEAL_NAME,
   DEFAULT_SCHEDULES,
@@ -17,11 +18,12 @@ import {
   schedulesFromInputs,
   valuesFromInputs,
 } from "@/lib/dealForm";
-import type { DealInput, DealResults, SavedDealSummary } from "@/lib/types";
+import type { DealInput, DealResults, SavedDealSummary, Sensitivity } from "@/lib/types";
 
 type Calculation = {
   inputs: DealInput;
   results: DealResults;
+  sensitivity: Sensitivity;
 };
 
 function errorMessage(err: unknown): string {
@@ -55,9 +57,12 @@ export default function DealCalculator() {
     const timer = window.setTimeout(async () => {
       setIsCalculating(true);
       try {
-        const results = await calculateDeal(inputs);
+          const [results, sensitivity] = await Promise.all([
+          calculateDeal(inputs),
+          calculateSensitivity(inputs),
+        ]);
         if (!cancelled) {
-          setCalculation({ inputs, results });
+          setCalculation({ inputs, results, sensitivity });
           setError("");
         }
       } catch (err) {
@@ -121,7 +126,8 @@ export default function DealCalculator() {
       setDealName(deal.name);
       setValues(valuesFromInputs(deal.inputs));
       setSchedules(schedulesFromInputs(deal.inputs));
-      setCalculation({ inputs: deal.inputs, results: deal.results });
+      const sensitivity = await calculateSensitivity(deal.inputs);
+      setCalculation({ inputs: deal.inputs, results: deal.results, sensitivity });
       showNotice(`Loaded "${deal.name}"`);
       const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       window.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
@@ -210,6 +216,11 @@ export default function DealCalculator() {
             <YearStrip results={calculation.results} isUpdating={isCalculating} />
             <EpsBridge inputs={calculation.inputs} results={calculation.results} />
             <SynergyTimeline results={calculation.results} />
+            <SensitivityTable
+                inputs={calculation.inputs}
+                sensitivity={calculation.sensitivity}
+                years={calculation.results.years.map((year) => year.year)}
+            />
             <details className="rounded-lg border border-rule bg-white">
               <summary className="cursor-pointer px-5 py-4 text-body font-semibold text-ink">
                 Show the numbers

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, XAxis, YAxis } from "recharts";
 import { buildEpsBridge } from "@/lib/bridge";
+import YearToggle from "@/components/YearToggle";
 import { CHART } from "@/lib/chartColors";
 import type { DealInput, DealResults } from "@/lib/types";
 
@@ -34,21 +35,11 @@ export default function EpsBridge({ inputs, results }: EpsBridgeProps) {
             How each part of the deal adds to or takes away from earnings per share.
           </p>
         </div>
-        <div role="group" aria-label="Choose a year" className="inline-flex rounded-md border border-rule p-0.5">
-          {results.years.map((year, index) => (
-            <button
-              key={year.year}
-              type="button"
-              aria-pressed={index === selected}
-              onClick={() => setYearIndex(index)}
-              className={`cursor-pointer rounded px-3 py-1 text-body font-semibold ${
-                index === selected ? "bg-ink text-white" : "text-ink-soft hover:text-ink"
-              }`}
-            >
-              Year {year.year}
-            </button>
-          ))}
-        </div>
+        <YearToggle
+            years={results.years.map((year) => year.year)}
+            selectedIndex={selected}
+            onSelect={setYearIndex}
+        />
       </div>
 
       <div className="mt-4 overflow-x-auto">

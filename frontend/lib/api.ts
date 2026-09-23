@@ -1,4 +1,4 @@
-import type { DealInput, DealResults, SavedDeal, SavedDealSummary } from "@/lib/types";
+import type { DealInput, DealResults, SavedDeal, SavedDealSummary, Sensitivity } from "@/lib/types";
 
 export const API_URL = "http://127.0.0.1:8000";
 
@@ -55,4 +55,11 @@ export function getDeal(id: number) {
 
 export function deleteDeal(id: number) {
   return request<{ deleted: number }>(`/deals/${id}`, { method: "DELETE" });
+}
+
+export function calculateSensitivity(inputs: DealInput) {
+  return request<Sensitivity>("/sensitivity", {
+    method: "POST",
+    body: JSON.stringify(inputs),
+  });
 }

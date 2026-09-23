@@ -49,3 +49,9 @@ export type SavedDeal = SavedDealSummary & {
   inputs: DealInput;
   results: DealResults;
 };
+
+export type Sensitivity = {
+  price_changes: number[];
+  synergy_changes: number[];
+  accretion: number[][][];
+};

@@ -102,3 +102,31 @@ def remove_deal(deal_id: int):
     if not database.delete_deal(deal_id):
         raise HTTPException(status_code=404, detail="Deal not found")
     return {"deleted": deal_id}
+
+PRICE_CHANGES = [-0.20, -0.10, 0.0, 0.10, 0.20]
+SYNERGY_CHANGES = [0.50, 0.25, 0.0, -0.25, -0.50]
+
+
+@app.post("/sensitivity")
+def sensitivity(deal: DealInput):
+    base = deal.model_dump()
+    grid = []
+
+    for synergy_change in SYNERGY_CHANGES:
+        row = []
+        for price_change in PRICE_CHANGES:
+            scenario = {
+                **base,
+                "purchase_price": base["purchase_price"] * (1 + price_change),
+                "cost_synergies": base["cost_synergies"] * (1 + synergy_change),
+                "revenue_synergies": base["revenue_synergies"] * (1 + synergy_change),
+            }
+            results = run_calculation(scenario)
+            row.append([year["accretion_pct"] for year in results["years"]])
+        grid.append(row)
+
+    return {
+        "price_changes": PRICE_CHANGES,
+        "synergy_changes": SYNERGY_CHANGES,
+        "accretion": grid,
+    }
