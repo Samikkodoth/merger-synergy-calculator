@@ -5,6 +5,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+import database
 from calculator import calculate_deal
 
 app = FastAPI(title="Merger Synergy Calculator API")
@@ -16,6 +17,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Make sure the deals table exists when the server starts
+database.create_table()
 
 
 class DealInput(BaseModel):
@@ -45,6 +49,18 @@ class DealInput(BaseModel):
     integration_cost_schedule: list[float]
 
 
+class SaveDealRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    inputs: DealInput
+
+
+def run_calculation(inputs):
+    try:
+        return calculate_deal(**inputs)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+
+
 @app.get("/")
 def health_check():
     return {"status": "The Merger Synergy Calculator API is running"}
@@ -52,7 +68,37 @@ def health_check():
 
 @app.post("/calculate")
 def calculate(deal: DealInput):
-    try:
-        return calculate_deal(**deal.model_dump())
-    except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error))
+    return run_calculation(deal.model_dump())
+
+
+@app.post("/deals")
+def save_new_deal(request: SaveDealRequest):
+    inputs = request.inputs.model_dump()
+    results = run_calculation(inputs)
+    saved = database.save_deal(request.name, inputs, results)
+    return {
+        "id": saved["id"],
+        "name": saved["name"],
+        "created_at": saved["created_at"],
+        "results": results,
+    }
+
+
+@app.get("/deals")
+def get_all_deals():
+    return database.list_deals()
+
+
+@app.get("/deals/{deal_id}")
+def get_one_deal(deal_id: int):
+    deal = database.get_deal(deal_id)
+    if deal is None:
+        raise HTTPException(status_code=404, detail="Deal not found")
+    return deal
+
+
+@app.delete("/deals/{deal_id}")
+def remove_deal(deal_id: int):
+    if not database.delete_deal(deal_id):
+        raise HTTPException(status_code=404, detail="Deal not found")
+    return {"deleted": deal_id}
