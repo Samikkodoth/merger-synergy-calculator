@@ -1,15 +1,16 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Libre_Caslon_Text, Public_Sans } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const publicSans = Public_Sans({
   subsets: ["latin"],
+  variable: "--font-public-sans",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const caslon = Libre_Caslon_Text({
   subsets: ["latin"],
+  weight: ["400", "700"],
+  variable: "--font-caslon",
 });
 
 export const metadata: Metadata = {
@@ -17,13 +18,12 @@ export const metadata: Metadata = {
   description: "Estimate M&A synergies and EPS accretion/dilution",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({
+  children,
+}: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="en" className={`${publicSans.variable} ${caslon.variable}`}>
+      <body className="bg-paper font-sans text-body text-ink antialiased">{children}</body>
     </html>
   );
 }

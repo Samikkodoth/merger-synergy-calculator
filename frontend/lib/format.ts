@@ -7,10 +7,15 @@ export function formatEps(eps: number): string {
 }
 
 export function formatPercent(pct: number): string {
-  const sign = pct >= 0 ? "+" : "";
-  return `${sign}${pct.toFixed(1)}%`;
+  const sign = pct >= 0 ? "+" : "−";
+  return `${sign}${Math.abs(pct).toFixed(1)}%`;
 }
 
 export function formatShares(shares: number): string {
   return Math.round(shares).toLocaleString("en-US");
+}
+
+export function formatMillionsCompact(amount: number): string {
+  const millions = Number((amount / 1_000_000).toFixed(1));
+  return `$${millions.toLocaleString("en-US")}M`;
 }
