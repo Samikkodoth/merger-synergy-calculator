@@ -6,6 +6,8 @@ import ResultsTable from "@/components/ResultsTable";
 import SavedDealsList from "@/components/SavedDealsList";
 import Tombstone from "@/components/Tombstone";
 import YearStrip from "@/components/YearStrip";
+import EpsBridge from "@/components/EpsBridge";
+import SynergyTimeline from "@/components/SynergyTimeline";
 import { calculateDeal, deleteDeal, getDeal, listDeals, saveDeal } from "@/lib/api";
 import {
   DEFAULT_DEAL_NAME,
@@ -206,6 +208,8 @@ export default function DealCalculator() {
           <div className={`space-y-10 transition-opacity duration-200 ${isStale ? "opacity-50" : "opacity-100"}`}>
             <Tombstone dealName={dealName} inputs={calculation.inputs} results={calculation.results} />
             <YearStrip results={calculation.results} isUpdating={isCalculating} />
+            <EpsBridge inputs={calculation.inputs} results={calculation.results} />
+            <SynergyTimeline results={calculation.results} />
             <details className="rounded-lg border border-rule bg-white">
               <summary className="cursor-pointer px-5 py-4 text-body font-semibold text-ink">
                 Show the numbers
