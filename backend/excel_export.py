@@ -415,7 +415,12 @@ def write_proforma(book):
         s.years(f"{prefix}_ni_y", "Net income",
                 lambda i: f"=[{prefix}_ni]*(1+[{prefix}_ni_g@0])" if i == 0
                 else f"=[{prefix}_ni_y@{i - 1}]*(1+[{prefix}_ni_g@{i}])")
-    s.years("sa_eps", "Acquirer standalone EPS", lambda i: f"=[acq_ni_y@{i}]/[acq_shares]", "eps", bold=True)
+    s.value("exist_share", "Existing stake's share of target income (20%+ stakes)",
+            "=IF([existing_eff]>=0.2,[existing_eff],0)", "pct")
+    s.years("exist_inc", "Income from the existing stake", lambda i: f"=[exist_share]*[tgt_ni_y@{i}]")
+    s.years("sa_ni", "Acquirer standalone net income (incl. existing stake)",
+            lambda i: f"=[acq_ni_y@{i}]+[exist_inc@{i}]", bold=True)
+    s.years("sa_eps", "Acquirer standalone EPS", lambda i: f"=[sa_ni@{i}]/[acq_shares]", "eps", bold=True)
 
     s.heading("Synergies (pre-tax, 100%)", years=True)
     s.years("syn_cost", "Cost synergies", lambda i: f"=[cost]*[cost_ph@{i}]")
@@ -435,9 +440,10 @@ def write_proforma(book):
             '=IF([cons]=1,1,IF([treatment]="equity",1-[inside],0))', "pct")
 
     s.heading("Pro forma net income (after tax)", years=True)
-    s.years("c_acq", "Acquirer net income", lambda i: f"=[acq_ni_y@{i}]")
-    s.years("c_tgt", "Target net income",
-            lambda i: f'=IF([cons]=1,[tgt_ni_y@{i}],IF([treatment]="equity",[final]*[tgt_ni_y@{i}],0))')
+    s.years("c_acq", "Acquirer standalone net income", lambda i: f"=[sa_ni@{i}]")
+    s.years("c_tgt", "Target net income (beyond the existing stake)",
+            lambda i: f'=IF([cons]=1,[tgt_ni_y@{i}],IF([treatment]="equity",[final]*[tgt_ni_y@{i}],0))'
+                      f"-[exist_inc@{i}]")
     s.years("c_refi", "Refinancing: target interest saved", lambda i: "=[refi]*[tgt_int]*(1-[tax])")
     s.years("c_cost", "Cost synergies", lambda i: f"=[syn_cost@{i}]*(1-[tax])*[in_ni]")
     s.years("c_rev", "Revenue synergies", lambda i: f"=[syn_rev@{i}]*(1-[tax])*[in_ni]")

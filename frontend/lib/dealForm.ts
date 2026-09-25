@@ -88,7 +88,9 @@ export const TABS: Tab[] = [
       {
         title: "The buyer",
         items: [
-          field("acquirer.net_income", "Net income", "amount", { hint: "Latest yearly profit after tax" }),
+          field("acquirer.net_income", "Net income", "amount", {
+            hint: "Latest yearly profit after tax, excluding any stake already held in the target",
+          }),
           field("acquirer.diluted_shares", "Diluted shares", "shares"),
           field("acquirer.share_price", "Share price", "price"),
         ],
@@ -122,7 +124,9 @@ export const TABS: Tab[] = [
         description: "For partial acquisitions and open offers. Leave at 100% bought for a full takeover.",
         ...ADV,
         items: [
-          field("stake.existing_pct", "Already owned", "percent"),
+          field("stake.existing_pct", "Already owned", "percent", {
+            hint: "At 20%+, its share of target income is added to the buyer's standalone income",
+          }),
           field("stake.bought_pct", "Bought at the offer price", "percent", { hint: "E.g. from the promoter" }),
           field("stake.open_offer_pct", "Open offer size", "percent", { hint: "% of all shares" }),
           field("stake.open_offer_price", "Open offer price", "price", { hint: "0 = same as the offer price" }),

@@ -89,9 +89,12 @@ The code lives in `backend/model/`, one file per step. `engine.py` runs them in 
 - **Partial acquisitions** use the partial goodwill convention. Write-ups are recorded at 100%
   and fully amortized, goodwill is recognised only on the acquirer's stake, and minority holders
   take their share of the target's net income after amortization and after synergies realised
-  inside the target. A stake owned before the deal is valued at the offer price for goodwill,
-  and is assumed not to be in the acquirer's standalone net income. Savings from refinancing
-  target debt are not shared with minority holders.
+  inside the target. Savings from refinancing target debt are not shared with minority holders.
+- **A stake owned before the deal** (20% or more, whether equity-accounted or already
+  controlling) earns the acquirer stake % × target net income, so that income is added to the
+  acquirer's standalone net income. Only the additional stake counts as new income from the
+  deal. Enter the acquirer's net income excluding that stake. Stakes below 20% are financial
+  investments and add nothing. For goodwill, the existing stake is valued at the offer price.
 - **Equity method (20–50%):** only the acquirer's share of the target's net income is included.
   There is no PPA and nothing of the target is consolidated. **Below 20%**, the holding is a
   financial investment: dividends aren't modelled and synergies aren't counted.

@@ -51,7 +51,10 @@ def run_years(deal, standalone, stake_result, funding_result, ppa_result, owners
     years = []
     for i in range(YEARS):
         year = i + 1
+        # Standalone net income already includes the existing stake's share of
+        # the target, so the target lines below only add the new income.
         acquirer_ni = standalone["acquirer"]["net_income"][i]
+        existing_income = standalone["acquirer"]["existing_stake_income"][i]
         target_ni_full = standalone["target"]["net_income"][i]
         standalone_eps = standalone["acquirer"]["eps"][i]
 
@@ -64,15 +67,16 @@ def run_years(deal, standalone, stake_result, funding_result, ppa_result, owners
 
         # --- The target's contribution ---
         if consolidated:
-            target_ni = target_ni_full
+            target_ni = target_ni_full - existing_income
             refinancing = target.interest_expense * (1 - t) if refinanced else 0.0
             amortization = (ppa_result["amortization"][i] if ppa_result else 0.0) * (1 - t)
             minority_interest = (1 - stake) * (
                 target_ni_full + inside * (synergy_ebitda - integration) * (1 - t) - amortization)
         elif treatment == "equity":
-            target_ni, refinancing, amortization, minority_interest = stake * target_ni_full, 0.0, 0.0, 0.0
+            target_ni, refinancing, amortization, minority_interest = (
+                stake * target_ni_full - existing_income, 0.0, 0.0, 0.0)
         else:
-            target_ni, refinancing, amortization, minority_interest = 0.0, 0.0, 0.0, 0.0
+            target_ni, refinancing, amortization, minority_interest = -existing_income, 0.0, 0.0, 0.0
 
         # --- Financing ---
         interest = schedule.interest()

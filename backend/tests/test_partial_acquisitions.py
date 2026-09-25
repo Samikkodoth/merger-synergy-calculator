@@ -103,3 +103,49 @@ def test_equity_method_synergies_inside_target_count_at_stake():
 def test_stake_above_100_percent_is_rejected():
     with pytest.raises(ValueError, match="more than 100%"):
         run(stake={"existing_pct": 0.5, "bought_pct": 0.6})
+
+
+def test_existing_stake_income_is_in_standalone_net_income():
+    # 25% already owned (equity method before the deal): 25% x 20M = 5M is already
+    # the acquirer's, so standalone NI = 100 + 5 = 105M and standalone EPS = 105 / 50 = $2.10.
+    results = run(stake={"existing_pct": 0.25, "bought_pct": 0.26}, **COMPANIES)
+    year = results["years"][0]
+    assert results["standalone"]["acquirer"]["existing_stake_income"][0] == pytest.approx(5 * M)
+    assert year["components"]["acquirer_net_income"] == pytest.approx(105 * M)
+    assert year["standalone_eps"] == pytest.approx(2.10)
+    assert results["eps_today"] == pytest.approx(2.10)
+
+
+def test_buying_up_to_51_percent_only_credits_the_additional_stake():
+    # 25% owned + 26% bought = 51% -> consolidate. Target NI 20M consolidated, minus the 5M
+    # already in standalone NI, minus minority interest 49% x 20 = 9.8M -> 5.2M new (26% x 20M).
+    # All stock: 2.6M shares x $26 = 67.6M -> 1.69M new acquirer shares.
+    # GAAP EPS = (105 + 5.2) / 51.69; accretion vs $2.10 standalone.
+    results = run(stake={"existing_pct": 0.25, "bought_pct": 0.26}, **COMPANIES)
+    year = results["years"][0]
+    c = year["components"]
+    assert results["stake"]["treatment"] == "consolidate"
+    assert c["target_net_income"] + c["minority_interest"] == pytest.approx(5.2 * M)
+    assert year["gaap_net_income"] == pytest.approx(110.2 * M)
+    assert year["gaap_accretion"] == pytest.approx((110.2 / 51.69) / 2.10 - 1)
+
+
+def test_existing_equity_stake_bought_up_within_equity_method():
+    # 25% owned + 13% bought = 38% (still equity method): new income = 13% x 20M = 2.6M.
+    c = run(stake={"existing_pct": 0.25, "bought_pct": 0.13})["years"][0]["components"]
+    assert c["acquirer_net_income"] == pytest.approx(105 * M)
+    assert c["target_net_income"] == pytest.approx(2.6 * M)
+
+
+def test_existing_controlling_stake_bought_to_100_percent():
+    # 60% owned (already consolidated): standalone includes 60% x 20M = 12M.
+    # Buying the other 40% adds 8M, with no minority interest left.
+    c = run(stake={"existing_pct": 0.6, "bought_pct": 0.4})["years"][0]["components"]
+    assert c["acquirer_net_income"] == pytest.approx(112 * M)
+    assert c["target_net_income"] + c["minority_interest"] == pytest.approx(8 * M)
+
+
+def test_small_existing_stake_adds_no_standalone_income():
+    # 10% is a financial investment before the deal: its dividends aren't modelled.
+    results = run(stake={"existing_pct": 0.1, "bought_pct": 0.5})
+    assert results["years"][0]["standalone_eps"] == pytest.approx(2.00)

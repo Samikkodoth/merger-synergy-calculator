@@ -2,7 +2,7 @@
 # Runs the whole model in order and collects warnings for the UI.
 
 from model.financing import analyze_consideration, analyze_ownership, resolve_funding
-from model.forecast import forecast_standalone
+from model.forecast import existing_stake_share, forecast_standalone
 from model.inputs import YEARS, DealInputV2, Fees, PPA, Stake, Tranche, flat
 from model.offer import analyze_offer, analyze_stake
 from model.ppa import analyze_ppa
@@ -95,8 +95,10 @@ def collect_issues(deal, stake_result, funding_result, ppa_result, years, value)
             "dividends, which are not modelled. Synergies are not modelled.")
     if stake_result["existing_pct"] > 0:
         add("note", "existing_stake",
-            "The stake owned before the deal is assumed not to be in the acquirer's standalone net "
-            "income, and is valued at the offer price for goodwill.")
+            "The acquirer's standalone net income includes its existing stake's share of target net "
+            "income (stakes of 20% or more), so only the additional stake counts as new income. Enter "
+            "the acquirer's net income excluding that stake. For goodwill, the existing stake is "
+            "valued at the offer price.")
 
     if any(y["credit"]["leverage_breach"] for y in years):
         add("warning", "leverage_breach",
@@ -123,7 +125,7 @@ def run_model(deal: DealInputV2) -> dict:
     funding_result = resolve_funding(deal, offer_result, stake_result, consideration)
     ownership = analyze_ownership(deal, consideration, funding_result)
     ppa_result = analyze_ppa(deal, stake_result)
-    standalone = forecast_standalone(deal)
+    standalone = forecast_standalone(deal, stake_result["existing_pct"])
 
     years, debt_schedule, run_rate = run_years(
         deal, standalone, stake_result, funding_result, ppa_result, ownership)
@@ -143,7 +145,9 @@ def run_model(deal: DealInputV2) -> dict:
         "currency": deal.currency,
         "valid": not any(issue["level"] == "error" for issue in issues),
         "issues": issues,
-        "eps_today": deal.acquirer.net_income / deal.acquirer.diluted_shares,
+        "eps_today": (deal.acquirer.net_income
+                      + existing_stake_share(stake_result["existing_pct"]) * deal.target.net_income
+                      ) / deal.acquirer.diluted_shares,
         "offer": offer_result,
         "stake": stake_result,
         "consideration": consideration,
