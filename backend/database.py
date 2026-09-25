@@ -31,6 +31,14 @@ def create_table():
         # Added for model version 2. Existing deals get version 1 and USD.
         conn.execute("ALTER TABLE deals ADD COLUMN IF NOT EXISTS model_version INTEGER NOT NULL DEFAULT 1")
         conn.execute("ALTER TABLE deals ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'USD'")
+        # Added for company lookups (Phase 2): processed SEC data and share prices
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS data_cache (
+                key TEXT PRIMARY KEY,
+                payload JSONB NOT NULL,
+                fetched_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """)
 
 
 def save_deal(name, inputs, results, model_version=2, currency="USD"):
@@ -67,3 +75,23 @@ def delete_deal(deal_id):
     with get_connection() as conn:
         result = conn.execute("DELETE FROM deals WHERE id = %s", (deal_id,))
         return result.rowcount > 0
+
+
+# ------------------------------------------------------------ Cache for company lookups
+
+def cache_get(key):
+    with get_connection() as conn:
+        return conn.execute("SELECT payload, fetched_at FROM data_cache WHERE key = %s", (key,)).fetchone()
+
+
+def cache_put(key, payload):
+    with get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO data_cache (key, payload, fetched_at) VALUES (%s, %s, NOW())
+            ON CONFLICT (key) DO UPDATE SET payload = EXCLUDED.payload, fetched_at = NOW()
+            """,
+            (key, Jsonb(payload)),
+        )
+        # Price entries are keyed by day, so old ones are never read again
+        conn.execute("DELETE FROM data_cache WHERE key LIKE 'price:%' AND fetched_at < NOW() - INTERVAL '7 days'")

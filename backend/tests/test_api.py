@@ -109,6 +109,19 @@ def test_old_saved_deals_still_load(fake_db):
     assert [round(y["gaap_accretion"] * 100, 1) for y in years[:3]] == [-3.0, 8.7, 18.3]
 
 
+def test_data_sources_are_saved_with_the_deal_and_ignored_by_the_maths(fake_db):
+    sources = {"lookup": {"acquirer": "MSFT", "basis": "ttm"},
+               "fields": {"acquirer.net_income": {"status": "confirmed", "tag": "NetIncomeLoss"}}}
+    with_sources = client.post("/calculate", json={**NEW_FORMAT, "data_sources": sources}).json()
+    assert with_sources == client.post("/calculate", json=NEW_FORMAT).json()
+
+    saved = client.post("/deals", json={"name": "Sourced", "inputs": {**NEW_FORMAT, "data_sources": sources}}).json()
+    assert client.get(f"/deals/{saved['id']}").json()["inputs"]["data_sources"] == sources
+    # Deals saved before Phase 2 load with no sources
+    old = client.post("/deals", json={"name": "Plain", "inputs": NEW_FORMAT}).json()
+    assert client.get(f"/deals/{old['id']}").json()["inputs"]["data_sources"] == {}
+
+
 def test_export_returns_a_workbook():
     response = client.post("/export", json={"inputs": NEW_FORMAT, "name": "Acme / Beta"})
     assert response.status_code == 200

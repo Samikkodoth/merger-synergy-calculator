@@ -3,14 +3,19 @@
 import os
 import re
 from contextlib import asynccontextmanager
-from typing import Any, Literal
+from datetime import date
+from typing import Any, Literal, Optional
 
-from fastapi import Body, FastAPI, HTTPException
+from fastapi import Body, FastAPI, HTTPException, Path, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel, Field, ValidationError
 
 import database
+from companydata import prices as price_data
+from companydata.sec import SecClient, SecNotConfigured, SecUnavailable, user_agent
+from companydata.service import CompanyData, DatabaseCache, UnknownTicker
+from companydata.xbrl import UnsupportedCompany
 from excel_export import workbook_bytes
 from model.engine import run_model
 from model.legacy import parse_deal
@@ -37,6 +42,9 @@ app.add_middleware(
     # Lets the website read the file name of an Excel download
     expose_headers=["Content-Disposition"],
 )
+
+# Company lookups (SEC filings and share prices), cached in the database
+company_data = CompanyData(SecClient(), DatabaseCache())
 
 Axis = Literal[tuple(AXES)]
 
@@ -157,3 +165,46 @@ def remove_deal(deal_id: int):
     if not database.delete_deal(deal_id):
         raise HTTPException(status_code=404, detail="Deal not found")
     return {"deleted": deal_id}
+
+
+# ---------------------------------------------------------------- Company data (SEC filings and prices)
+
+Ticker = Path(pattern=r"^[A-Za-z0-9.\-]{1,12}$", description="e.g. AAPL or BRK.B")
+
+
+def company_data_errors(function, *args):
+    """Turn lookup problems into clear messages with the right status code."""
+    try:
+        return function(*args)
+    except SecNotConfigured as error:
+        raise HTTPException(status_code=503, detail=str(error))
+    except (UnknownTicker, price_data.PriceNotFound) as error:
+        raise HTTPException(status_code=404, detail=str(error))
+    except UnsupportedCompany as error:
+        raise HTTPException(status_code=422, detail=str(error))
+    except (SecUnavailable, price_data.PriceUnavailable) as error:
+        raise HTTPException(status_code=502, detail=str(error))
+
+
+@app.get("/company-data/status")
+def company_data_status():
+    """Which automatic data is available on this server."""
+    try:
+        user_agent()
+        sec = True
+    except SecNotConfigured:
+        sec = False
+    has_prices = price_data.configured_source() is not None
+    return {"sec": sec, "prices": has_prices, "prices_message": None if has_prices else price_data.LOCAL_ONLY}
+
+
+@app.get("/company/{ticker}")
+def get_company(ticker: str = Ticker):
+    return company_data_errors(company_data.company, ticker)
+
+
+@app.get("/price/{ticker}")
+def get_price(ticker: str = Ticker, announced: Optional[date] = Query(None, description="Announcement date")):
+    if announced is not None and announced > date.today():
+        raise HTTPException(status_code=422, detail="The announcement date can't be in the future.")
+    return company_data_errors(company_data.prices, ticker, announced)

@@ -4,7 +4,7 @@
 # Every advanced feature defaults to "off", so a deal that only fills in the
 # basics behaves exactly like the original calculator.
 
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -175,3 +175,6 @@ class DealInputV2(BaseModel):
     synergies: Synergies = Synergies()
     thresholds: Thresholds = Thresholds()
     valuation: Valuation = Valuation()
+    # Where auto-filled numbers came from (SEC filings, share prices) and whether
+    # the user has checked them. Saved with the deal; the maths never reads it.
+    data_sources: dict[str, Any] = Field(default_factory=dict)
