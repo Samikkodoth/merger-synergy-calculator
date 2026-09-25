@@ -5,7 +5,7 @@ import SelectField from "@/components/SelectField";
 import { formatValue } from "@/components/SourceBadge";
 import { getCompany, getDataStatus, getPrices } from "@/lib/api";
 import {
-  COMPANY_FIELDS, PRICE_PATHS, applyGrowth, applyTaxRate, companyLabel, confirmAll, countByStatus,
+  COMPANY_FIELDS, PRICE_PATHS, applyGrowth, applyTaxRate, companyLabel, confirmAll, countByStatus, dealTitle,
   fillFromCompany, fillPrice, findConflicts, isTicker, markNeedsInput, replaceWithFiling,
   type Conflict, type Role,
 } from "@/lib/companyData";
@@ -24,6 +24,8 @@ type Result = {
 type CompanyLookupProps = {
   form: FormState;
   onApply: (update: (state: FormState) => FormState) => void;
+  /** Called with a deal name built from the companies found, e.g. "Microsoft acquires Coca Cola" */
+  onCompaniesFound?: (title: string) => void;
 };
 
 const ROLES: { role: Role; label: string }[] = [
@@ -155,7 +157,7 @@ function CompanyCard({ role, result, basis, onApply }: {
 }
 
 /** Fill the form from SEC filings (and share prices, where available). */
-export default function CompanyLookup({ form, onApply }: CompanyLookupProps) {
+export default function CompanyLookup({ form, onApply, onCompaniesFound }: CompanyLookupProps) {
   const [status, setStatus] = useState<DataStatus | null>(null);
   const [results, setResults] = useState<Partial<Record<Role, Result>>>({});
   const [isFetching, setIsFetching] = useState(false);
@@ -197,6 +199,8 @@ export default function CompanyLookup({ form, onApply }: CompanyLookupProps) {
     setResults(fetched);
     setIsFetching(false);
     onApply((state) => fillAll(state, fetched, lookup.basis));
+    const title = dealTitle(fetched.acquirer?.profile?.name, fetched.target?.profile?.name);
+    if (title) onCompaniesFound?.(title);
   }
 
   function changeBasis(basis: Basis) {

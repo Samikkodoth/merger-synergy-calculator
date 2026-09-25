@@ -312,3 +312,27 @@ export function countByStatus(sources: Record<string, FieldSource>) {
 export function needsAttention(source: FieldSource | undefined): boolean {
   return source !== undefined && (source.status === "auto" || source.status === "missing" || source.status === "todo");
 }
+
+// ---------------------------------------------------------------- Deal name
+
+// Legal endings the SEC keeps in company names ("COCA COLA CO", "MICROSOFT CORP", "Apple Inc.")
+const LEGAL_ENDINGS = /(\s*[,&]?\s+(inc|incorporated|corp|corporation|co|company|ltd|limited|plc|llc|lp|l\.p|n\.v|s\.a|ag)\.?)+$/i;
+
+/** A readable company name: "COCA COLA CO" → "Coca Cola", "Walt Disney Co" → "Walt Disney". */
+export function shortName(secName: string): string {
+  let name = secName.replace(/\/[A-Z]{2,}\/?/g, " ").replace(/\s+/g, " ").trim(); // state tags like /DE/
+  name = name.replace(LEGAL_ENDINGS, "").trim();
+  // The SEC often stores names in capitals; mixed-case names are kept as written
+  if (name === name.toUpperCase()) {
+    name = name.toLowerCase().replace(/(^|[\s\-(&.])([a-z])/g, (_, before: string, letter: string) => before + letter.toUpperCase());
+  }
+  return name || secName.trim();
+}
+
+/** "Microsoft acquires Coca Cola", from whichever companies were found. */
+export function dealTitle(buyer?: string, target?: string): string | null {
+  if (buyer && target) return `${shortName(buyer)} acquires ${shortName(target)}`;
+  if (buyer) return `${shortName(buyer)} acquisition`;
+  if (target) return `Acquisition of ${shortName(target)}`;
+  return null;
+}

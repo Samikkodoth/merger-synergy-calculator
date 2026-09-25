@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  applyGrowth, applyTaxRate, confirmAll, confirmField, fillFromCompany, fillPrice, findConflicts, markEdited,
-  markNeedsInput, replaceWithFiling,
+  applyGrowth, applyTaxRate, confirmAll, confirmField, dealTitle, fillFromCompany, fillPrice, findConflicts,
+  markEdited, markNeedsInput, replaceWithFiling, shortName,
 } from "@/lib/companyData";
 import { DEFAULT_FORM, buildDealInput, dataSources, formFromInputs } from "@/lib/dealForm";
 import type { CompanyField, CompanyProfile, PriceLookup } from "@/lib/types";
@@ -213,5 +213,25 @@ describe("switching between TTM and the fiscal year", () => {
     const filled = fillFromCompany(edited, "target", other, "fy");
     expect(filled.values["target.net_income"]).toBe("18");
     expect(filled.sources["target.net_income"]).toMatchObject({ status: "auto", company: "Gamma Inc (GAMMA)" });
+  });
+});
+
+describe("deal name from the companies", () => {
+  it("tidies SEC company names", () => {
+    expect(shortName("COCA COLA CO")).toBe("Coca Cola");
+    expect(shortName("MICROSOFT CORP")).toBe("Microsoft");
+    expect(shortName("Apple Inc.")).toBe("Apple");
+    expect(shortName("Walt Disney Co")).toBe("Walt Disney");
+    expect(shortName("JPMORGAN CHASE & CO")).toBe("Jpmorgan Chase");
+    expect(shortName("BERKSHIRE HATHAWAY INC")).toBe("Berkshire Hathaway");
+    expect(shortName("EXXON MOBIL CORP /NJ/")).toBe("Exxon Mobil");
+    expect(shortName("NVIDIA CORP")).toBe("Nvidia");
+  });
+
+  it("builds a title from whichever companies were found", () => {
+    expect(dealTitle("MICROSOFT CORP", "COCA COLA CO")).toBe("Microsoft acquires Coca Cola");
+    expect(dealTitle("MICROSOFT CORP")).toBe("Microsoft acquisition");
+    expect(dealTitle(undefined, "COCA COLA CO")).toBe("Acquisition of Coca Cola");
+    expect(dealTitle()).toBeNull();
   });
 });

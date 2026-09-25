@@ -55,6 +55,9 @@ function usablePair(pair: AxisPair, available: AxisKey[]): AxisPair {
 export default function DealCalculator() {
   // What the user has typed
   const [dealName, setDealName] = useState(DEFAULT_DEAL_NAME);
+  // True while the name is the example or one built from a company lookup, so a new
+  // lookup may replace it. A name the user typed or loaded is never replaced.
+  const [nameIsAuto, setNameIsAuto] = useState(true);
   const [form, setForm] = useState<FormState>(DEFAULT_FORM);
   const [chosenPair, setChosenPair] = useState<AxisPair>({ x: "price", y: "synergies" });
 
@@ -179,6 +182,7 @@ export default function DealCalculator() {
 
   function resetToExample() {
     setDealName(DEFAULT_DEAL_NAME);
+    setNameIsAuto(true);
     setForm(DEFAULT_FORM);
   }
 
@@ -212,6 +216,7 @@ export default function DealCalculator() {
     try {
       const deal = await getDeal(id);
       setDealName(deal.name);
+      setNameIsAuto(false);
       setForm(formFromInputs(deal.inputs));
       setCalculation({ inputs: deal.inputs, results: deal.results });
       showNotice(`Loaded "${deal.name}"`);
@@ -250,7 +255,10 @@ export default function DealCalculator() {
               type="text"
               value={dealName}
               maxLength={200}
-              onChange={(event) => setDealName(event.target.value)}
+              onChange={(event) => {
+                setDealName(event.target.value);
+                setNameIsAuto(false);
+              }}
               className="mt-1 w-full border-b border-rule bg-transparent pb-1 text-heading font-semibold text-ink outline-none focus:border-ink"
             />
             <div className="mt-4 flex flex-wrap gap-2">
@@ -280,7 +288,13 @@ export default function DealCalculator() {
             </div>
           </div>
 
-          <CompanyLookup form={form} onApply={setForm} />
+          <CompanyLookup
+            form={form}
+            onApply={setForm}
+            onCompaniesFound={(title) => {
+              if (nameIsAuto) setDealName(title);
+            }}
+          />
 
           <DealForm
             state={form}

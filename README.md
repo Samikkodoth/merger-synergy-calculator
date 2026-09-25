@@ -15,6 +15,8 @@ pays, how it's financed, and whether the synergies justify the premium.
 - **Excel export:** the whole model as an `.xlsx` with live formulas.
 - **Fill from SEC filings:** type the buyer's and target's tickers to fill in their financials
   from their latest 10-K and 10-Q (US SEC filers only). Every filled field shows its source.
+  The deal is named after the companies (e.g. "Microsoft acquires Coca Cola") unless you've
+  typed your own name.
 
 ## Running it locally
 
