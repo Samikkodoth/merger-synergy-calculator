@@ -6,7 +6,7 @@ Tracks the upgrade described in `UPGRADE_PLAN.md`. All work is on the `ib-upgrad
 | Phase | Status |
 |---|---|
 | 1. Finance model | **Done**, awaiting browser testing and approval to merge |
-| 2. Automatic company data (SEC EDGAR) | Not started |
+| 2. Automatic company data (SEC EDGAR) | **Done**, awaiting browser testing and approval |
 | 3. Recent deals discovery | Not started |
 
 ## Phase 1: finance model
@@ -142,7 +142,110 @@ Run them with `python -m pytest` in `backend` (after `pip install -r requirement
 8. Download Excel: change an input on the Inputs tab and check that the other tabs update.
 9. Phone width: no sideways scrolling.
 
-## Phase 2: next
+## Phase 2: automatic company data
 
-Not started. It needs an email address for the SEC `User-Agent` header (stored in the
-`SEC_USER_AGENT` environment variable), which the SEC requires for its free APIs.
+### What was built
+
+**Backend** (`backend/companydata/`):
+
+- `sec.py`: SEC requests with the `SEC_USER_AGENT` contact, at most 5 a second; ticker → CIK.
+- `xbrl.py`: reads the SEC's company facts. For each company: revenue, EBITDA (operating income +
+  D&A), net income, interest expense, effective tax rate and diluted shares, for the last twelve
+  months (FY + year to date − prior year to date) or the latest fiscal year; cash, total debt and
+  book equity from the latest balance sheet; shares outstanding from the cover page with its
+  "as of" date; 3-year historical growth. Each field tries an ordered list of XBRL tags and
+  records the tag, period, filing and link it used.
+- `checks.py`: warnings for missing items, stale filings, negative EBITDA, likely one-time or
+  non-operating items, odd tax rates, banks/insurers/REITs, several share classes and share
+  counts that don't agree.
+- `prices.py`: Tiingo, only when `TIINGO_API_KEY` is set (local use only); otherwise prices stay
+  manual. Unaffected price = last close before the announcement date, adjusted for later splits.
+- `service.py`: caches each company for a day and prices per day, in a new `data_cache` table
+  (additive). A database problem never stops a lookup.
+- New endpoints: `GET /company/{ticker}`, `GET /price/{ticker}?announced=YYYY-MM-DD`,
+  `GET /company-data/status`. Deals can store `data_sources`, which the maths ignores.
+
+**Frontend:** a "Fill from SEC filings" box above the form (tickers, announcement date, last
+twelve months or latest fiscal year). Filled fields get a tag (Auto · verify, Checked, Manual,
+Not in filings, You fill this) that opens the source: company, filing, period, filing date, XBRL
+tag and a link. Tabs with fields to look at get a dot. Each company's warnings, historical growth
+and effective tax rate are shown, and growth and tax rate are only used when you click "use".
+Sources are saved with deals.
+
+### Decisions
+
+- **Target shares:** cover-page shares outstanding (`dei:EntityCommonStockSharesOutstanding`),
+  falling back to the weighted average diluted count. Always "verify"; options and other dilution
+  are not included. **Buyer shares:** weighted average diluted, which is what reported EPS uses.
+- **Both share prices** are the last close before the announcement date (default today), so the
+  exchange ratio uses pre-announcement prices. The latest close is shown in the source details.
+- **Prices:** Tiingo, local only (its free plan is internal use only). Stooq now blocks
+  automated downloads; Yahoo's terms don't allow this use.
+- One `data_cache` table for both SEC data and prices, instead of the two tables in the plan.
+- Missing figures are cleared (the field turns red), not left at old values.
+
+### Found by testing real companies
+
+- The SEC adds a filing's numbers a little after the filing appears (Coca-Cola's latest 10-Q),
+  so only filings with numbers already available are used.
+- Disney's 10-K tags interest expense as negative, its 10-Qs as positive. Items that can't be
+  negative now skip such a tag and try the next; otherwise they're missing, with the reason.
+- Berkshire and Alphabet have several share classes; the cover-page count may cover only one.
+  These now get a warning.
+- Apple and JPMorgan don't tag interest expense in a usable way: shown as "Not in filings".
+
+### Simplifications
+
+- US GAAP filers reporting in USD only (no 20-F/40-F, IFRS or non-USD filers).
+- The balance sheet is always the latest one, whichever income basis is chosen.
+- Total debt excludes operating leases; for banks, debt and EBITDA aren't meaningful (warned).
+- The "one-time items" warning is a rule of thumb: net income more than 35% away from
+  (operating income − interest) × (1 − 21%).
+- Switching between TTM and fiscal year refills the company fields, replacing edits to them.
+- Company data is USD, so lookup is off while the currency is INR.
+
+### Tests
+
+- **Backend: 148 pytest tests** (98 from Phase 1 + 50 new). Test case 9 uses saved, trimmed
+  SEC data for Apple, Coca-Cola and Microsoft and checks each field's value, tag, period and
+  filing, including the TTM arithmetic, fallback tags and the filing lag. Made-up files cover the
+  edge cases and every warning; fake SEC and price sources cover the cache and the API.
+- **Frontend: 26 vitest tests** (14 + 12 new) for filling the form, field status and saving.
+- `npm run build` and lint pass. Checked in the browser against the live SEC (MSFT buying KO),
+  including at 375px phone width, with no console errors.
+
+### Commits
+
+| Commit | What |
+|---|---|
+| `a2f7809` | Add SEC EDGAR company lookup and a price adapter |
+| `a1ccacd` | Distrust negative expenses and flag multiple share classes |
+| `0f5a82e` | Add "Fill from SEC filings" to the frontend |
+
+### Before merging to `main`
+
+- On Render, add the setting `SEC_USER_AGENT` = `Merger Synergy Calculator kodothsamik@gmail.com`.
+  Do **not** add `TIINGO_API_KEY` there.
+- `requirements.txt` now includes `httpx` (and its dependencies `httpcore` and `certifi`).
+- The first start creates the `data_cache` table in Neon.
+
+**Browser checklist**
+
+1. Type `MSFT` and `KO`, click Fetch: both cards appear; the Deal terms, Financing, Forecasts,
+   Accounting and Synergies tabs get a dot; buyer EPS is about $17.95.
+2. Click a field's "Auto · verify" tag: the source shows the filing, period, tag and a working
+   "View filing" link. "Mark as checked" turns it to "✓ Checked".
+3. Edit an auto-filled field: its tag becomes "Manual" and shows what the filing said.
+4. Try `AAPL` as the buyer: interest expense is "Not in filings" and blank (red) until you fill it.
+5. Try `TSM` (foreign filer) and `ZZZZ`: clear error messages, nothing filled.
+6. Try `BRK.B`: share-class and bank/insurer warnings.
+7. Switch "Figures" to "Latest fiscal year": the numbers change to the fiscal year.
+8. "Use as forecast" and "Use for the deal" fill growth and the tax rate; nothing else does.
+9. Save the deal, reload the page, load it: the tags come back.
+10. Without `TIINGO_API_KEY`: the note "Automatic prices available in local use only", and
+    share prices marked "You fill this". With the key (optional): prices fill in.
+11. Phone width: no sideways scrolling.
+
+## Phase 3: next
+
+Not started.
