@@ -201,7 +201,8 @@ Sources are saved with deals.
 - Total debt excludes operating leases; for banks, debt and EBITDA aren't meaningful (warned).
 - The "one-time items" warning is a rule of thumb: net income more than 35% away from
   (operating income − interest) × (1 − 21%).
-- Switching between TTM and fiscal year refills the company fields, replacing edits to them.
+- Switching between TTM and fiscal year refreshes only "Auto" fields. Manual and Checked fields
+  are kept, and any that differ from the new figures are listed with a "Replace" option.
 - Company data is USD, so lookup is off while the currency is INR.
 
 ### Tests
@@ -210,7 +211,7 @@ Sources are saved with deals.
   SEC data for Apple, Coca-Cola and Microsoft and checks each field's value, tag, period and
   filing, including the TTM arithmetic, fallback tags and the filing lag. Made-up files cover the
   edge cases and every warning; fake SEC and price sources cover the cache and the API.
-- **Frontend: 26 vitest tests** (14 + 12 new) for filling the form, field status and saving.
+- **Frontend: 31 vitest tests** (14 + 17 new) for filling the form, field status and saving.
 - `npm run build` and lint pass. Checked in the browser against the live SEC (MSFT buying KO),
   including at 375px phone width, with no console errors.
 
@@ -239,7 +240,9 @@ Sources are saved with deals.
 4. Try `AAPL` as the buyer: interest expense is "Not in filings" and blank (red) until you fill it.
 5. Try `TSM` (foreign filer) and `ZZZZ`: clear error messages, nothing filled.
 6. Try `BRK.B`: share-class and bank/insurer warnings.
-7. Switch "Figures" to "Latest fiscal year": the numbers change to the fiscal year.
+7. Edit one filled field, then switch "Figures" to "Latest fiscal year": auto fields change,
+   your edit stays and is listed in a "Kept your figures" note; "Replace with filing figures"
+   swaps it back.
 8. "Use as forecast" and "Use for the deal" fill growth and the tax rate; nothing else does.
 9. Save the deal, reload the page, load it: the tags come back.
 10. Without `TIINGO_API_KEY`: the note "Automatic prices available in local use only", and

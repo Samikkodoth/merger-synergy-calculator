@@ -33,7 +33,7 @@ export default function SourceBadge({ source, open, onToggle, controls }: Source
   );
 }
 
-function formatValue(value: number, kind: FieldSource["kind"]): string {
+export function formatValue(value: number, kind: FieldSource["kind"]): string {
   switch (kind) {
     case "shares": return formatShares(value);
     case "price": return formatEps(value);

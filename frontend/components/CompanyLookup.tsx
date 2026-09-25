@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from "react";
 import SelectField from "@/components/SelectField";
+import { formatValue } from "@/components/SourceBadge";
 import { getCompany, getDataStatus, getPrices } from "@/lib/api";
 import {
   COMPANY_FIELDS, PRICE_PATHS, applyGrowth, applyTaxRate, companyLabel, confirmAll, countByStatus,
-  fillFromCompany, fillPrice, isTicker, markNeedsInput, type Role,
+  fillFromCompany, fillPrice, findConflicts, isTicker, markNeedsInput, replaceWithFiling,
+  type Conflict, type Role,
 } from "@/lib/companyData";
 import { switchMode, type FormState } from "@/lib/dealForm";
 import { formatChangePct, formatEps, formatPct } from "@/lib/format";
@@ -157,6 +159,8 @@ export default function CompanyLookup({ form, onApply }: CompanyLookupProps) {
   const [status, setStatus] = useState<DataStatus | null>(null);
   const [results, setResults] = useState<Partial<Record<Role, Result>>>({});
   const [isFetching, setIsFetching] = useState(false);
+  // Differences the user chose to keep ("Keep mine")
+  const [dismissed, setDismissed] = useState<string[]>([]);
   const { lookup } = form;
 
   useEffect(() => {
@@ -197,8 +201,34 @@ export default function CompanyLookup({ form, onApply }: CompanyLookupProps) {
 
   function changeBasis(basis: Basis) {
     setLookup({ basis });
-    // Refill from what was already fetched; no new requests
-    if (Object.keys(results).length > 0) onApply((state) => fillAll(state, results, basis));
+    // Refill "auto" company fields from what was already fetched (no new requests). Fields you
+    // edited or checked are kept; any that differ are listed below. Prices don't depend on the basis.
+    onApply((state) => {
+      let next = state;
+      for (const { role } of ROLES) {
+        const profile = results[role]?.profile;
+        if (profile) next = fillFromCompany(next, role, profile, basis);
+      }
+      return next;
+    });
+  }
+
+  // Fields you edited or checked that differ from the current filing figures
+  const conflicts: (Conflict & { role: Role })[] = ROLES.flatMap(({ role }) => {
+    const profile = results[role]?.profile;
+    return profile ? findConflicts(form, role, profile, lookup.basis).map((c) => ({ ...c, role })) : [];
+  }).filter((c) => !dismissed.includes(conflictKey(c)));
+
+  function replaceConflicts() {
+    onApply((state) => {
+      let next = state;
+      for (const { role } of ROLES) {
+        const profile = results[role]?.profile;
+        const paths = conflicts.filter((c) => c.role === role).map((c) => c.path);
+        if (profile && paths.length > 0) next = replaceWithFiling(next, role, profile, lookup.basis, paths);
+      }
+      return next;
+    });
   }
 
   const counts = countByStatus(form.sources);
@@ -295,6 +325,45 @@ export default function CompanyLookup({ form, onApply }: CompanyLookupProps) {
 
         {priceNote && <p className="text-caption text-ink-soft">{priceNote}</p>}
 
+        {conflicts.length > 0 && (
+          <div role="status" className="space-y-2 rounded-md border border-brass/50 bg-brass/10 p-3 text-caption text-ink">
+            <p>
+              <span className="font-semibold">Kept your figures. </span>
+              These fields are marked Manual or Checked, so they weren&apos;t refreshed, and they differ from the
+              filings now shown:
+            </p>
+            <ul className="space-y-1">
+              {conflicts.map((c) => (
+                <li key={c.path} className="flex flex-wrap justify-between gap-x-3">
+                  <span>
+                    {c.label} <span className="text-ink-soft">({c.status === "manual" ? "manual" : "checked"})</span>
+                  </span>
+                  <span className="tabular-nums">
+                    yours {c.yours === null ? "blank" : formatValue(c.yours, c.kind)} · filing{" "}
+                    {formatValue(c.filing, c.kind)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={replaceConflicts}
+                className="cursor-pointer rounded border border-ink bg-white px-2 py-0.5 font-semibold text-ink hover:bg-paper"
+              >
+                Replace with filing figures
+              </button>
+              <button
+                type="button"
+                onClick={() => setDismissed([...dismissed, ...conflicts.map(conflictKey)])}
+                className="cursor-pointer rounded border border-rule bg-white px-2 py-0.5 font-semibold text-ink hover:bg-paper"
+              >
+                Keep mine
+              </button>
+            </div>
+          </div>
+        )}
+
         {ROLES.map(({ role }) => {
           const result = results[role];
           return result ? (
@@ -324,6 +393,10 @@ export default function CompanyLookup({ form, onApply }: CompanyLookupProps) {
       </div>
     </details>
   );
+}
+
+function conflictKey(conflict: Conflict): string {
+  return `${conflict.path}:${conflict.filing}`;
 }
 
 function fillAll(state: FormState, results: Partial<Record<Role, Result>>, basis: Basis): FormState {

@@ -172,8 +172,10 @@ Limits:
 - Some companies don't tag some items (Apple, for example, stopped tagging interest expense);
   those fields are marked "Not in filings". A tag with a negative value for an item that can't be
   negative (revenue, D&A, interest, shares) is not trusted.
-- Changing between "Last twelve months" and "Latest fiscal year" refills the company figures,
-  replacing any edits to them.
+- Changing between "Last twelve months" and "Latest fiscal year" refreshes only "Auto · verify"
+  fields (and blank "Not in filings" ones). Fields marked Manual or Checked are kept; any that
+  differ from the new figures are listed, with a "Replace with filing figures" button. The same
+  applies when you fetch the same company again; a different company replaces everything.
 
 ### Share prices: Tiingo (optional, local use only)
 

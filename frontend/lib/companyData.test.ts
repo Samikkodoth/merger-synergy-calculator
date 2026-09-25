@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  applyGrowth, applyTaxRate, confirmAll, confirmField, fillFromCompany, fillPrice, markEdited, markNeedsInput,
+  applyGrowth, applyTaxRate, confirmAll, confirmField, fillFromCompany, fillPrice, findConflicts, markEdited,
+  markNeedsInput, replaceWithFiling,
 } from "@/lib/companyData";
 import { DEFAULT_FORM, buildDealInput, dataSources, formFromInputs } from "@/lib/dealForm";
 import type { CompanyField, CompanyProfile, PriceLookup } from "@/lib/types";
@@ -155,5 +156,62 @@ describe("field status", () => {
     expect(loaded.lookup.target).toBe("BETA");
     // A deal without a lookup saves nothing extra
     expect(dataSources(DEFAULT_FORM)).toEqual({});
+  });
+});
+
+describe("switching between TTM and the fiscal year", () => {
+  // Same company; fiscal-year figures differ from TTM: net income $18M, revenue $190M, EBITDA $36M
+  const flow = (ttm: number, fy: number) => ({
+    ttm: { ...PROFILE.fields.net_income.ttm, value: ttm },
+    fy: { ...PROFILE.fields.net_income.fy, value: fy },
+  });
+  const BOTH: CompanyProfile = {
+    ...PROFILE,
+    fields: { ...PROFILE.fields, net_income: flow(20e6, 18e6), revenue: flow(200e6, 190e6), ebitda: flow(40e6, 36e6) },
+  };
+
+  // Filled on TTM; the user types $25M net income and checks revenue; EBITDA stays auto
+  const ttm = fillFromCompany(advanced, "target", BOTH, "ttm");
+  const edited = confirmField(
+    markEdited({ ...ttm, values: { ...ttm.values, "target.net_income": "25" } }, ["target.net_income"]),
+    "target.revenue",
+  );
+  const fy = fillFromCompany(edited, "target", BOTH, "fy");
+
+  it("refreshes auto fields only", () => {
+    expect(fy.values["target.ebitda"]).toBe("36");
+    expect(fy.sources["target.ebitda"].basisLabel).toBe("Fiscal year ended 2025-12-31");
+  });
+
+  it("keeps manual and checked fields unchanged", () => {
+    expect(fy.values["target.net_income"]).toBe("25");
+    expect(fy.sources["target.net_income"].status).toBe("manual");
+    expect(fy.values["target.revenue"]).toBe("200");
+    expect(fy.sources["target.revenue"]).toMatchObject({ status: "confirmed", basisLabel: "Twelve months to 2026-06-30" });
+  });
+
+  it("lists kept fields that differ from the new figures", () => {
+    const conflicts = findConflicts(fy, "target", BOTH, "fy");
+    expect(conflicts.map((c) => [c.label, c.status, c.yours, c.filing])).toEqual([
+      ["Target net income", "manual", 25e6, 18e6],
+      ["Target revenue", "confirmed", 200e6, 190e6],
+    ]);
+    // Back on TTM, the checked revenue matches again; only the manual edit differs
+    expect(findConflicts(fy, "target", BOTH, "ttm").map((c) => c.path)).toEqual(["target.net_income"]);
+  });
+
+  it("replaces the listed fields when asked", () => {
+    const replaced = replaceWithFiling(fy, "target", BOTH, "fy", ["target.net_income", "target.revenue"]);
+    expect(replaced.values["target.net_income"]).toBe("18");
+    expect(replaced.values["target.revenue"]).toBe("190");
+    expect(replaced.sources["target.net_income"].status).toBe("auto");
+    expect(findConflicts(replaced, "target", BOTH, "fy")).toEqual([]);
+  });
+
+  it("a different company overwrites everything", () => {
+    const other = { ...BOTH, ticker: "GAMMA", name: "Gamma Inc" };
+    const filled = fillFromCompany(edited, "target", other, "fy");
+    expect(filled.values["target.net_income"]).toBe("18");
+    expect(filled.sources["target.net_income"]).toMatchObject({ status: "auto", company: "Gamma Inc (GAMMA)" });
   });
 });

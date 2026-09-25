@@ -5,7 +5,9 @@
 // Company data is in USD. Values are written into the form in its units ($M,
 // shares in millions, % as 0-100), exactly as if the user had typed them.
 
-import { YEARS, fromApiNumber, premiumText, type FormState } from "@/lib/dealForm";
+import {
+  YEARS, fromApiNumber, isValidNumber, premiumText, toApiNumber, type FormState,
+} from "@/lib/dealForm";
 import type {
   Basis, CompanyField, CompanyProfile, FieldSource, Growth, PriceLookup,
 } from "@/lib/types";
@@ -16,6 +18,7 @@ type Kind = NonNullable<FieldSource["kind"]>;
 
 type Mapping = {
   path: string;
+  label: string;
   /** Profile fields to try in order (the target's shares fall back to the diluted count) */
   fields: string[];
   kind: Kind;
@@ -23,25 +26,28 @@ type Mapping = {
 
 export const COMPANY_FIELDS: Record<Role, Mapping[]> = {
   acquirer: [
-    { path: "acquirer.net_income", fields: ["net_income"], kind: "amount" },
+    { path: "acquirer.net_income", label: "Buyer net income", fields: ["net_income"], kind: "amount" },
     // EPS uses the weighted average diluted count, as reported EPS does
-    { path: "acquirer.diluted_shares", fields: ["diluted_shares"], kind: "shares" },
-    { path: "acquirer.revenue", fields: ["revenue"], kind: "amount" },
-    { path: "acquirer.ebitda", fields: ["ebitda"], kind: "amount" },
-    { path: "acquirer.debt", fields: ["total_debt"], kind: "amount" },
-    { path: "acquirer.cash", fields: ["cash"], kind: "amount" },
-    { path: "acquirer.interest_expense", fields: ["interest_expense"], kind: "amount" },
+    { path: "acquirer.diluted_shares", label: "Buyer diluted shares", fields: ["diluted_shares"], kind: "shares" },
+    { path: "acquirer.revenue", label: "Buyer revenue", fields: ["revenue"], kind: "amount" },
+    { path: "acquirer.ebitda", label: "Buyer EBITDA", fields: ["ebitda"], kind: "amount" },
+    { path: "acquirer.debt", label: "Buyer debt", fields: ["total_debt"], kind: "amount" },
+    { path: "acquirer.cash", label: "Buyer cash", fields: ["cash"], kind: "amount" },
+    { path: "acquirer.interest_expense", label: "Buyer interest expense", fields: ["interest_expense"], kind: "amount" },
   ],
   target: [
-    { path: "target.net_income", fields: ["net_income"], kind: "amount" },
+    { path: "target.net_income", label: "Target net income", fields: ["net_income"], kind: "amount" },
     // The offer is paid on shares outstanding now: the cover page count
-    { path: "target.diluted_shares", fields: ["shares_outstanding", "diluted_shares"], kind: "shares" },
-    { path: "target.revenue", fields: ["revenue"], kind: "amount" },
-    { path: "target.ebitda", fields: ["ebitda"], kind: "amount" },
-    { path: "target.debt", fields: ["total_debt"], kind: "amount" },
-    { path: "target.cash", fields: ["cash"], kind: "amount" },
-    { path: "target.interest_expense", fields: ["interest_expense"], kind: "amount" },
-    { path: "target.book_value", fields: ["book_equity"], kind: "amount" },
+    {
+      path: "target.diluted_shares", label: "Target shares",
+      fields: ["shares_outstanding", "diluted_shares"], kind: "shares",
+    },
+    { path: "target.revenue", label: "Target revenue", fields: ["revenue"], kind: "amount" },
+    { path: "target.ebitda", label: "Target EBITDA", fields: ["ebitda"], kind: "amount" },
+    { path: "target.debt", label: "Target debt", fields: ["total_debt"], kind: "amount" },
+    { path: "target.cash", label: "Target cash", fields: ["cash"], kind: "amount" },
+    { path: "target.interest_expense", label: "Target interest expense", fields: ["interest_expense"], kind: "amount" },
+    { path: "target.book_value", label: "Target book value", fields: ["book_equity"], kind: "amount" },
   ],
 };
 
@@ -81,32 +87,28 @@ function formText(value: number, kind: Kind): string {
   return fromApiNumber(value, kind, "USD");
 }
 
-/** Fill one company's figures. Missing items are cleared, never guessed. */
-export function fillFromCompany(state: FormState, role: Role, profile: CompanyProfile, basis: Basis): FormState {
-  let values = { ...state.values };
-  const sources = { ...state.sources };
-
-  for (const mapping of COMPANY_FIELDS[role]) {
-    const options = mapping.fields.map((name) => profile.fields[name]?.[basis]);
-    const found = options.find((field): field is CompanyField => field !== undefined && field.value !== null);
-    if (!found) {
-      const first = options[0];
-      values = { ...values, [mapping.path]: "" };
-      sources[mapping.path] = {
+/** What the filings say for one form field: its text in form units and its source. */
+function fetched(mapping: Mapping, profile: CompanyProfile, basis: Basis): { text: string; source: FieldSource } {
+  const options = mapping.fields.map((name) => profile.fields[name]?.[basis]);
+  const found = options.find((field): field is CompanyField => field !== undefined && field.value !== null);
+  if (!found) {
+    return {
+      text: "",
+      source: {
         status: "missing",
         company: companyLabel(profile),
-        reason: first?.reason ?? "Not found in the filings",
-      };
-      continue;
-    }
-    const usedFallback = found !== options[0];
-    const notes = [found.note];
-    if (usedFallback) {
-      notes.push("The cover page doesn't report shares outstanding, so this is the weighted average diluted count.",
-        SHARES_NOTE);
-    }
-    values = { ...values, [mapping.path]: formText(found.value!, mapping.kind) };
-    sources[mapping.path] = {
+        reason: options[0]?.reason ?? "Not found in the filings",
+      },
+    };
+  }
+  const notes = [found.note];
+  if (found !== options[0]) {
+    notes.push("The cover page doesn't report shares outstanding, so this is the weighted average diluted count.",
+      SHARES_NOTE);
+  }
+  return {
+    text: formText(found.value!, mapping.kind),
+    source: {
       status: "auto",
       company: companyLabel(profile),
       basisLabel: found.as_of ? `As of ${found.as_of}` : profile.bases[basis],
@@ -114,7 +116,76 @@ export function fillFromCompany(state: FormState, role: Role, profile: CompanyPr
       kind: mapping.kind,
       periods: found.periods,
       note: notes.filter(Boolean).join(" ") || undefined,
-    };
+    },
+  };
+}
+
+/** A field the user edited or checked for this same company is theirs: a refill leaves it alone. */
+function isKept(state: FormState, path: string, profile: CompanyProfile): boolean {
+  const source = state.sources[path];
+  return source !== undefined
+    && (source.status === "manual" || source.status === "confirmed")
+    && source.company === companyLabel(profile);
+}
+
+/** Fill one company's figures. Missing items are cleared, never guessed. Fields the user
+ * edited or checked for the same company are kept (see findConflicts). */
+export function fillFromCompany(state: FormState, role: Role, profile: CompanyProfile, basis: Basis): FormState {
+  const values = { ...state.values };
+  const sources = { ...state.sources };
+  for (const mapping of COMPANY_FIELDS[role]) {
+    if (isKept(state, mapping.path, profile)) continue;
+    const { text, source } = fetched(mapping, profile, basis);
+    values[mapping.path] = text;
+    sources[mapping.path] = source;
+  }
+  return { ...state, values, sources };
+}
+
+export type Conflict = {
+  path: string;
+  label: string;
+  status: "manual" | "confirmed";
+  kind: Kind;
+  /** In API units, like the filing value */
+  yours: number | null;
+  filing: number;
+  basisLabel: string;
+};
+
+/** Kept fields whose value differs from what the filings now say (e.g. after switching basis). */
+export function findConflicts(state: FormState, role: Role, profile: CompanyProfile, basis: Basis): Conflict[] {
+  const conflicts: Conflict[] = [];
+  for (const mapping of COMPANY_FIELDS[role]) {
+    if (!isKept(state, mapping.path, profile)) continue;
+    const { text, source } = fetched(mapping, profile, basis);
+    if (source.value === undefined) continue; // Nothing to replace it with
+    const current = state.values[mapping.path] ?? "";
+    if (isValidNumber(current) && Number(current) === Number(text)) continue;
+    conflicts.push({
+      path: mapping.path,
+      label: mapping.label,
+      status: state.sources[mapping.path].status as Conflict["status"],
+      kind: mapping.kind,
+      yours: isValidNumber(current) ? toApiNumber(current, mapping.kind, "USD") : null,
+      filing: source.value,
+      basisLabel: source.basisLabel ?? "",
+    });
+  }
+  return conflicts;
+}
+
+/** Replace the chosen kept fields with the filing figures (they become "auto" again). */
+export function replaceWithFiling(
+  state: FormState, role: Role, profile: CompanyProfile, basis: Basis, paths: string[],
+): FormState {
+  const values = { ...state.values };
+  const sources = { ...state.sources };
+  for (const mapping of COMPANY_FIELDS[role]) {
+    if (!paths.includes(mapping.path)) continue;
+    const { text, source } = fetched(mapping, profile, basis);
+    values[mapping.path] = text;
+    sources[mapping.path] = source;
   }
   return { ...state, values, sources };
 }
