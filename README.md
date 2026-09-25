@@ -90,11 +90,18 @@ The code lives in `backend/model/`, one file per step. `engine.py` runs them in 
   and fully amortized, goodwill is recognised only on the acquirer's stake, and minority holders
   take their share of the target's net income after amortization and after synergies realised
   inside the target. Savings from refinancing target debt are not shared with minority holders.
-- **A stake owned before the deal** (20% or more, whether equity-accounted or already
-  controlling) earns the acquirer stake % × target net income, so that income is added to the
-  acquirer's standalone net income. Only the additional stake counts as new income from the
-  deal. Enter the acquirer's net income excluding that stake. Stakes below 20% are financial
-  investments and add nothing. For goodwill, the existing stake is valued at the offer price.
+- **Enter acquirer figures as reported**, the way they appear in filings. They already include
+  any stake held in the target before the deal, so the model never adds it again:
+  - **20–50% owned (equity method):** reported net income already includes stake % × target net
+    income. Standalone EPS uses the reported figure, and the deal adds only the additional stake.
+  - **Over 50% owned (already consolidated):** reported revenue, EBITDA, cash, debt and interest
+    already include 100% of the target, and net income is after minority interest. Buying more
+    only reduces the minority interest; the target's EBITDA and debt are not added again in the
+    credit metrics. If the target's debt is refinanced, it is replaced rather than added.
+    Buying more of a company that is already controlled is an equity transaction, so there is no
+    new goodwill, write-ups or amortization.
+  - **Below 20%:** a financial investment. Nothing in the acquirer's figures comes from it. For
+    goodwill, a stake owned before the deal is valued at the offer price.
 - **Equity method (20–50%):** only the acquirer's share of the target's net income is included.
   There is no PPA and nothing of the target is consolidated. **Below 20%**, the holding is a
   financial investment: dividends aren't modelled and synergies aren't counted.

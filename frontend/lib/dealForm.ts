@@ -87,9 +87,10 @@ export const TABS: Tab[] = [
     groups: [
       {
         title: "The buyer",
+        description: "Enter figures as reported. They already include any stake held in the target.",
         items: [
           field("acquirer.net_income", "Net income", "amount", {
-            hint: "Latest yearly profit after tax, excluding any stake already held in the target",
+            hint: "As reported (attributable to shareholders), after tax",
           }),
           field("acquirer.diluted_shares", "Diluted shares", "shares"),
           field("acquirer.share_price", "Share price", "price"),
@@ -125,7 +126,7 @@ export const TABS: Tab[] = [
         ...ADV,
         items: [
           field("stake.existing_pct", "Already owned", "percent", {
-            hint: "At 20%+, its share of target income is added to the buyer's standalone income",
+            hint: "Buyer figures are as reported, so they already include this stake",
           }),
           field("stake.bought_pct", "Bought at the offer price", "percent", { hint: "E.g. from the promoter" }),
           field("stake.open_offer_pct", "Open offer size", "percent", { hint: "% of all shares" }),
@@ -205,7 +206,8 @@ export const TABS: Tab[] = [
     groups: [
       {
         title: "Acquirer standalone",
-        description: "Accretion is measured against the acquirer's own forecast EPS for each year.",
+        description: "Enter figures as reported. If the target is already consolidated (over 50% owned), "
+          + "they already include it. Accretion is measured against this forecast EPS for each year.",
         items: [
           field("acquirer.revenue", "Revenue", "amount"),
           field("acquirer.ebitda", "EBITDA", "amount"),

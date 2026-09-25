@@ -349,7 +349,8 @@ def write_ppa(book):
     s.title("Purchase price allocation",
             "Partial goodwill: write-ups at 100%, goodwill on the acquirer's stake only. "
             "Applies only when the target is consolidated and a book value is entered.")
-    s.value("ppa_on", "PPA applies? (1 = yes)", '=IF(AND([treatment]="consolidate",[ppa_flag]=1),1,0)', "number")
+    s.value("ppa_on", "PPA applies? (1 = yes; not when the target was already controlled)",
+            '=IF(AND([treatment]="consolidate",[ppa_flag]=1,[existing_eff]<=0.5),1,0)', "number")
     s.value("ppa_consideration", "Consideration (incl. prior stake at offer price)",
             "=[eq_cost]+IF([ps]=1,[existing_eff]*[tgt_shares]*[offer_price],0)")
     s.value("ppa_book", "Book value of equity", "=[tgt_book]")
@@ -415,12 +416,11 @@ def write_proforma(book):
         s.years(f"{prefix}_ni_y", "Net income",
                 lambda i: f"=[{prefix}_ni]*(1+[{prefix}_ni_g@0])" if i == 0
                 else f"=[{prefix}_ni_y@{i - 1}]*(1+[{prefix}_ni_g@{i}])")
+    s.note("Acquirer figures are as reported, so they already include any stake held in the target.")
     s.value("exist_share", "Existing stake's share of target income (20%+ stakes)",
             "=IF([existing_eff]>=0.2,[existing_eff],0)", "pct")
-    s.years("exist_inc", "Income from the existing stake", lambda i: f"=[exist_share]*[tgt_ni_y@{i}]")
-    s.years("sa_ni", "Acquirer standalone net income (incl. existing stake)",
-            lambda i: f"=[acq_ni_y@{i}]+[exist_inc@{i}]", bold=True)
-    s.years("sa_eps", "Acquirer standalone EPS", lambda i: f"=[sa_ni@{i}]/[acq_shares]", "eps", bold=True)
+    s.years("exist_inc", "Of which: income from the existing stake", lambda i: f"=[exist_share]*[tgt_ni_y@{i}]")
+    s.years("sa_eps", "Acquirer standalone EPS", lambda i: f"=[acq_ni_y@{i}]/[acq_shares]", "eps", bold=True)
 
     s.heading("Synergies (pre-tax, 100%)", years=True)
     s.years("syn_cost", "Cost synergies", lambda i: f"=[cost]*[cost_ph@{i}]")
@@ -440,7 +440,7 @@ def write_proforma(book):
             '=IF([cons]=1,1,IF([treatment]="equity",1-[inside],0))', "pct")
 
     s.heading("Pro forma net income (after tax)", years=True)
-    s.years("c_acq", "Acquirer standalone net income", lambda i: f"=[sa_ni@{i}]")
+    s.years("c_acq", "Acquirer net income (as reported)", lambda i: f"=[acq_ni_y@{i}]")
     s.years("c_tgt", "Target net income (beyond the existing stake)",
             lambda i: f'=IF([cons]=1,[tgt_ni_y@{i}],IF([treatment]="equity",[final]*[tgt_ni_y@{i}],0))'
                       f"-[exist_inc@{i}]")
@@ -480,16 +480,23 @@ def write_proforma(book):
 def write_credit(book):
     s = book.sheet("Credit")
     s.title("Credit metrics", "End-of-year debt. Ratios need EBITDA figures to be entered.")
-    s.value("has_ebitda", "EBITDA entered? (1 = yes)", "=IF(OR([acq_ebitda]>0,AND([cons]=1,[tgt_ebitda]>0)),1,0)", "number")
+    s.value("ctrl_before", "Target already consolidated before the deal? (1 = yes)",
+            "=IF([existing_eff]>0.5,1,0)", "number")
+    s.value("adds_tgt", "Add the target's EBITDA, cash and debt? (1 = yes)",
+            "=IF(AND([cons]=1,[ctrl_before]=0),1,0)", "number")
+    s.value("has_ebitda", "EBITDA entered? (1 = yes)",
+            "=IF(OR([acq_ebitda]>0,AND([adds_tgt]=1,[tgt_ebitda]>0)),1,0)", "number")
     s.heading("Combined company", years=True)
     s.years("cr_ebitda", "Pro forma EBITDA",
-            lambda i: f"=[acq_ebitda_y@{i}]+[cons]*[tgt_ebitda_y@{i}]+[syn_ebitda@{i}]*[in_ebitda]")
+            lambda i: f"=[acq_ebitda_y@{i}]+[adds_tgt]*[tgt_ebitda_y@{i}]+[syn_ebitda@{i}]*[in_ebitda]")
     s.years("cr_debt", "Total debt",
-            lambda i: f"=[acq_debt]+IF(AND([cons]=1,[refi]=0),[tgt_debt],0)+[debt_end@{i}]")
-    s.years("cr_cash", "Cash", lambda i: "=[cons]*[tgt_cash]+IF([acq_cash_flag]=1,MAX([acq_cash]-[cash_eff],0),0)")
+            lambda i: f"=[acq_debt]+IF(AND([adds_tgt]=1,[refi]=0),[tgt_debt],0)"
+                      f"-IF(AND([ctrl_before]=1,[refi]=1),[tgt_debt],0)+[debt_end@{i}]")
+    s.years("cr_cash", "Cash", lambda i: "=[adds_tgt]*[tgt_cash]+IF([acq_cash_flag]=1,MAX([acq_cash]-[cash_eff],0),0)")
     s.years("cr_net_debt", "Net debt", lambda i: f"=[cr_debt@{i}]-[cr_cash@{i}]")
     s.years("cr_int", "Interest expense",
-            lambda i: f"=[acq_int]+IF(AND([cons]=1,[refi]=0),[tgt_int],0)+[debt_int@{i}]+[debt_fees@{i}]")
+            lambda i: f"=[acq_int]+IF(AND([adds_tgt]=1,[refi]=0),[tgt_int],0)"
+                      f"-IF(AND([ctrl_before]=1,[refi]=1),[tgt_int],0)+[debt_int@{i}]+[debt_fees@{i}]")
     ok = "AND([has_ebitda]=1,[cr_ebitda@{i}]>0)"
     s.heading("Ratios", years=True)
     s.years("cr_lev", "Total debt / EBITDA",

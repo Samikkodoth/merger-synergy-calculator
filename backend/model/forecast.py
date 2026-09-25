@@ -26,25 +26,30 @@ def forecast_company(company):
 
 
 def existing_stake_share(existing_pct):
-    """The share of target net income the acquirer already earns before the deal.
+    """The share of target net income already in the acquirer's reported net income.
 
     A stake of 20% or more is equity-accounted, or consolidated if it is already
-    controlling; either way the income attributable to the acquirer is
-    stake % x target net income. Below 20% it is a financial investment whose
-    dividends aren't modelled.
+    controlling (with minority interest deducted); either way the income
+    attributable to the acquirer is stake % x target net income. Below 20% it is
+    a financial investment whose dividends aren't modelled.
     """
     return existing_pct if existing_pct >= 0.2 else 0.0
 
 
+def already_controlled(existing_pct):
+    """Above 50%, the acquirer's reported revenue, EBITDA and debt already include
+    100% of the target."""
+    return existing_pct > 0.5
+
+
 def forecast_standalone(deal, existing_pct=0.0):
-    """`existing_pct` is the stake in the target owned before the deal. Its share
-    of target net income is part of the acquirer's standalone net income (the
-    typed acquirer net income is taken to exclude it)."""
+    """Acquirer figures are entered AS REPORTED, so they already include any stake
+    held in the target before the deal. `existing_stake_income` records how much
+    of the acquirer's net income comes from that stake, so the pro forma model
+    only credits the additional stake."""
     target = forecast_company(deal.target)
     share = existing_stake_share(existing_pct)
     acquirer = forecast_company(deal.acquirer)
-    acquirer["own_net_income"] = acquirer["net_income"]
     acquirer["existing_stake_income"] = [share * ni for ni in target["net_income"]]
-    acquirer["net_income"] = [own + stake for own, stake in zip(acquirer["own_net_income"], acquirer["existing_stake_income"])]
     acquirer["eps"] = [ni / deal.acquirer.diluted_shares for ni in acquirer["net_income"]]
     return {"acquirer": acquirer, "target": target}

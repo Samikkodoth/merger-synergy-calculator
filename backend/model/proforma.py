@@ -5,6 +5,7 @@
 # any cash sweep depends on each year's earnings.
 
 from model.debt import DebtSchedule
+from model.forecast import already_controlled
 from model.inputs import YEARS
 
 
@@ -40,6 +41,13 @@ def run_years(deal, standalone, stake_result, funding_result, ppa_result, owners
     stake = stake_result["final_pct"]
     consolidated = treatment == "consolidate"
     refinanced = consolidated and deal.offer.debt_treatment == "refinanced"
+    # If the target was already consolidated, the acquirer's reported revenue,
+    # EBITDA, cash, debt and interest include it; don't add them again.
+    controlled_before = already_controlled(stake_result["existing_pct"])
+    adds_target = consolidated and not controlled_before
+    # Refinancing replaces target debt that is already in the acquirer's figures
+    removed_debt = target.debt if controlled_before and refinanced else 0.0
+    removed_interest = target.interest_expense if controlled_before and refinanced else 0.0
     in_net_income, attributable, in_ebitda = synergy_shares(
         treatment, stake, deal.stake.synergies_inside_target_pct)
     inside = deal.stake.synergies_inside_target_pct
@@ -51,8 +59,8 @@ def run_years(deal, standalone, stake_result, funding_result, ppa_result, owners
     years = []
     for i in range(YEARS):
         year = i + 1
-        # Standalone net income already includes the existing stake's share of
-        # the target, so the target lines below only add the new income.
+        # Reported acquirer net income already includes the existing stake's share
+        # of the target, so the target lines below only add the new income.
         acquirer_ni = standalone["acquirer"]["net_income"][i]
         existing_income = standalone["acquirer"]["existing_stake_income"][i]
         target_ni_full = standalone["target"]["net_income"][i]
@@ -117,17 +125,19 @@ def run_years(deal, standalone, stake_result, funding_result, ppa_result, owners
 
         # --- Credit metrics (end of year) ---
         ebitda = (standalone["acquirer"]["ebitda"][i]
-                  + (standalone["target"]["ebitda"][i] if consolidated else 0.0)
+                  + (standalone["target"]["ebitda"][i] if adds_target else 0.0)
                   + synergy_ebitda * in_ebitda)
-        total_debt = acquirer.debt + (target.debt if consolidated and not refinanced else 0.0) + schedule.total_balance()
-        cash = (target.cash if consolidated else 0.0)
+        total_debt = (acquirer.debt + (target.debt if adds_target and not refinanced else 0.0)
+                      - removed_debt + schedule.total_balance())
+        cash = (target.cash if adds_target else 0.0)
         if acquirer.cash is not None:
             cash += max(acquirer.cash - funding_result["cash_used"], 0.0)
         interest_expense = (acquirer.interest_expense
-                            + (target.interest_expense if consolidated and not refinanced else 0.0)
+                            + (target.interest_expense if adds_target and not refinanced else 0.0)
+                            - removed_interest
                             + interest + fee_amortization)
         # Ratios need real EBITDA figures, which simple mode doesn't ask for.
-        has_ebitda = acquirer.ebitda > 0 or (consolidated and target.ebitda > 0)
+        has_ebitda = acquirer.ebitda > 0 or (adds_target and target.ebitda > 0)
         leverage = safe_ratio(total_debt, ebitda) if has_ebitda else None
         net_leverage = safe_ratio(total_debt - cash, ebitda) if has_ebitda else None
         coverage = safe_ratio(ebitda, interest_expense) if has_ebitda and ebitda > 0 else None

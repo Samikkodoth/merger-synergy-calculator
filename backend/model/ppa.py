@@ -7,6 +7,7 @@
 # only recognised on the acquirer's share. A stake owned before the deal is
 # counted at the offer price.
 
+from model.forecast import already_controlled
 from model.inputs import YEARS
 
 
@@ -19,6 +20,10 @@ def straight_line(amount, life, year):
 def analyze_ppa(deal, stake_result):
     target, ppa, tax = deal.target, deal.ppa, deal.tax_rate
     if stake_result["treatment"] != "consolidate" or target.book_value is None:
+        return None
+    # Buying more of a company that is already controlled is an equity
+    # transaction: no new goodwill or write-ups.
+    if already_controlled(stake_result["existing_pct"]):
         return None
 
     stake = stake_result["final_pct"]

@@ -2,7 +2,7 @@
 # Runs the whole model in order and collects warnings for the UI.
 
 from model.financing import analyze_consideration, analyze_ownership, resolve_funding
-from model.forecast import existing_stake_share, forecast_standalone
+from model.forecast import already_controlled, forecast_standalone
 from model.inputs import YEARS, DealInputV2, Fees, PPA, Stake, Tranche, flat
 from model.offer import analyze_offer, analyze_stake
 from model.ppa import analyze_ppa
@@ -93,12 +93,22 @@ def collect_issues(deal, stake_result, funding_result, ppa_result, years, value)
         add("note", "financial_investment",
             "Below 20%, the holding is a financial investment: its EPS effect is limited to "
             "dividends, which are not modelled. Synergies are not modelled.")
-    if stake_result["existing_pct"] > 0:
+    existing = stake_result["existing_pct"]
+    if already_controlled(existing):
         add("note", "existing_stake",
-            "The acquirer's standalone net income includes its existing stake's share of target net "
-            "income (stakes of 20% or more), so only the additional stake counts as new income. Enter "
-            "the acquirer's net income excluding that stake. For goodwill, the existing stake is "
-            "valued at the offer price.")
+            "The target is already consolidated, so enter the acquirer's figures as reported: they "
+            "already include 100% of the target's revenue, EBITDA and debt, and its share of the "
+            "target's net income after minority interest. Buying more only reduces the minority "
+            "interest. It is an equity transaction, so there is no new goodwill or write-ups.")
+    elif existing >= 0.2:
+        add("note", "existing_stake",
+            "Enter the acquirer's figures as reported: its net income already includes its existing "
+            "stake's share of the target's net income, so only the additional stake counts as new "
+            "income. For goodwill, the existing stake is valued at the offer price.")
+    elif existing > 0:
+        add("note", "existing_stake",
+            "The existing stake is below 20%, so it is treated as a financial investment with no "
+            "income in the acquirer's figures. For goodwill, it is valued at the offer price.")
 
     if any(y["credit"]["leverage_breach"] for y in years):
         add("warning", "leverage_breach",
@@ -145,9 +155,7 @@ def run_model(deal: DealInputV2) -> dict:
         "currency": deal.currency,
         "valid": not any(issue["level"] == "error" for issue in issues),
         "issues": issues,
-        "eps_today": (deal.acquirer.net_income
-                      + existing_stake_share(stake_result["existing_pct"]) * deal.target.net_income
-                      ) / deal.acquirer.diluted_shares,
+        "eps_today": deal.acquirer.net_income / deal.acquirer.diluted_shares,
         "offer": offer_result,
         "stake": stake_result,
         "consideration": consideration,

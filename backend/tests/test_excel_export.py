@@ -46,10 +46,20 @@ DEALS = {
     "existing 25% stake bought up to 51%": deal(
         offer={"pct_stock": 0.5},
         stake={"existing_pct": 0.25, "bought_pct": 0.26},
-        acquirer={"ebitda": 200 * M},
+        acquirer={"net_income": 105 * M, "ebitda": 200 * M},
         target={"ebitda": 30 * M, "book_value": 100 * M, "net_income_growth": [0.05] * 5},
         ppa={"intangibles": 20 * M},
         funding={"tranches": [{"rate": 0.06}], "balancing_item": "tranche_1"},
+        synergies={"cost": 10 * M},
+    ),
+    "existing 60% stake, refinanced, bought to 100%": deal(
+        offer={"pct_stock": 0.5, "debt_treatment": "refinanced"},
+        stake={"existing_pct": 0.6, "bought_pct": 0.4},
+        acquirer={"net_income": 112 * M, "ebitda": 230 * M, "debt": 540 * M, "interest_expense": 23 * M,
+                  "cash": 80 * M},
+        target={"ebitda": 30 * M, "debt": 40 * M, "cash": 5 * M, "interest_expense": 3 * M, "book_value": 100 * M},
+        ppa={"intangibles": 20 * M},
+        funding={"tranches": [{"rate": 0.06, "fee_pct": 0.01}], "balancing_item": "tranche_1"},
         synergies={"cost": 10 * M},
     ),
     "equity method (38%)": deal(
