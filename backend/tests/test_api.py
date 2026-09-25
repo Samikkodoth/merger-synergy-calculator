@@ -107,3 +107,10 @@ def test_old_saved_deals_still_load(fake_db):
     assert loaded["currency"] == "USD"
     years = loaded["results"]["years"]
     assert [round(y["gaap_accretion"] * 100, 1) for y in years[:3]] == [-3.0, 8.7, 18.3]
+
+
+def test_export_returns_a_workbook():
+    response = client.post("/export", json={"inputs": NEW_FORMAT, "name": "Acme / Beta"})
+    assert response.status_code == 200
+    assert response.headers["content-disposition"] == 'attachment; filename="Acme__Beta.xlsx"'
+    assert response.content[:2] == b"PK"  # .xlsx files are zip archives

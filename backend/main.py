@@ -1,6 +1,7 @@
 # main.py
 # The API: lets other programs (like our website) use the calculator.
 import os
+import re
 from contextlib import asynccontextmanager
 from typing import Any, Literal
 
@@ -10,6 +11,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field, ValidationError
 
 import database
+from excel_export import workbook_bytes
 from model.engine import run_model
 from model.legacy import parse_deal
 from model.sensitivity import AXES, run_sensitivity
@@ -41,6 +43,10 @@ class SensitivityRequest(BaseModel):
     inputs: dict[str, Any]
     x_axis: Axis = "price"
     y_axis: Axis = "synergies"
+
+
+class ExportRequest(SensitivityRequest):
+    name: str = Field("Deal", max_length=200)
 
 
 class SaveDealRequest(BaseModel):
@@ -90,6 +96,22 @@ def sensitivity(body: dict[str, Any] = Body(...)):
         raise HTTPException(status_code=422, detail=readable(error))
     deal = load_deal(request.inputs)
     return run_or_400(run_sensitivity, deal, request.x_axis, request.y_axis)
+
+
+@app.post("/export")
+def export_excel(request: ExportRequest):
+    deal = load_deal(request.inputs)
+    run_or_400(run_model, deal)
+    try:
+        grid = run_sensitivity(deal, request.x_axis, request.y_axis)
+    except ValueError:
+        grid = None  # The chosen axes don't apply to this deal; export without a grid.
+    filename = re.sub(r"[^A-Za-z0-9 _-]", "", request.name).strip().replace(" ", "_") or "Deal"
+    return Response(
+        content=workbook_bytes(deal, grid),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}.xlsx"'},
+    )
 
 
 @app.post("/deals")
