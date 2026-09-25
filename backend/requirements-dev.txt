@@ -1,0 +1,5 @@
+# Tools used only for running the tests locally. Render does not install these.
+-r requirements.txt
+httpx==0.28.1
+pycel==1.0b30
+pytest==9.1.1
