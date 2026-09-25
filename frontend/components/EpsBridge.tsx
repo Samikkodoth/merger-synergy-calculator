@@ -5,10 +5,10 @@ import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, XAx
 import { buildEpsBridge } from "@/lib/bridge";
 import YearToggle from "@/components/YearToggle";
 import { CHART } from "@/lib/chartColors";
-import type { DealInput, DealResults } from "@/lib/types";
+import { formatAxisEps } from "@/lib/format";
+import type { DealResults } from "@/lib/types";
 
 type EpsBridgeProps = {
-  inputs: DealInput;
   results: DealResults;
 };
 
@@ -18,11 +18,11 @@ const TONE_COLORS = {
   down: CHART.loss,
 };
 
-export default function EpsBridge({ inputs, results }: EpsBridgeProps) {
+export default function EpsBridge({ results }: EpsBridgeProps) {
   const lastIndex = results.years.length - 1;
   const [yearIndex, setYearIndex] = useState(lastIndex);
   const selected = Math.min(yearIndex, lastIndex);
-  const bars = buildEpsBridge(inputs, results, selected);
+  const bars = buildEpsBridge(results, selected, results.currency);
 
   return (
     <section aria-labelledby="eps-bridge-title" className="rounded-lg border border-rule bg-white p-5">
@@ -32,7 +32,7 @@ export default function EpsBridge({ inputs, results }: EpsBridgeProps) {
             What moves EPS
           </h2>
           <p className="text-body text-ink-soft">
-            How each part of the deal adds to or takes away from earnings per share.
+            From the acquirer&apos;s standalone EPS to GAAP EPS after the deal. Small items are hidden.
           </p>
         </div>
         <YearToggle
@@ -43,7 +43,7 @@ export default function EpsBridge({ inputs, results }: EpsBridgeProps) {
       </div>
 
       <div className="mt-4 overflow-x-auto">
-        <div className="h-72 min-w-[720px]">
+        <div className="h-72" style={{ minWidth: Math.max(bars.length * 76, 480) }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={bars} margin={{ top: 24, right: 8, bottom: 0, left: 0 }}>
               <CartesianGrid vertical={false} stroke={CHART.rule} />
@@ -55,10 +55,10 @@ export default function EpsBridge({ inputs, results }: EpsBridgeProps) {
                 tick={{ fill: CHART.inkSoft, fontSize: 12 }}
               />
               <YAxis
-                tickFormatter={(value: number) => `$${value.toFixed(2)}`}
+                tickFormatter={(value: number) => formatAxisEps(value, results.currency)}
                 tickLine={false}
                 axisLine={false}
-                width={56}
+                width={64}
                 tick={{ fill: CHART.inkSoft, fontSize: 12 }}
               />
               <Bar dataKey="base" stackId="bridge" fill="transparent" isAnimationActive={false} />
