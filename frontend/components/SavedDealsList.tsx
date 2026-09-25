@@ -23,7 +23,9 @@ export default function SavedDealsList({ deals, onLoad, onDelete }: SavedDealsLi
             <li key={deal.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
               <div className="min-w-0">
                 <p className="truncate text-body font-semibold text-ink">{deal.name}</p>
-                <p className="text-caption text-ink-soft">Saved {new Date(deal.created_at).toLocaleString()}</p>
+                <p className="text-caption text-ink-soft">
+                  {deal.currency === "INR" ? "INR · " : ""}Saved {new Date(deal.created_at).toLocaleString()}
+                </p>
               </div>
               <div className="flex gap-2">
                 <button

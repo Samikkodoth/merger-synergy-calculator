@@ -34,6 +34,8 @@ app.add_middleware(
     allow_origins=[origin.strip().rstrip("/") for origin in ALLOWED_ORIGINS],
     allow_methods=["*"],
     allow_headers=["*"],
+    # Lets the website read the file name of an Excel download
+    expose_headers=["Content-Disposition"],
 )
 
 Axis = Literal[tuple(AXES)]

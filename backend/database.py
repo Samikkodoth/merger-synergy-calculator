@@ -8,8 +8,8 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from dotenv import load_dotenv
 
-# Read the secret settings from the .env file
-load_dotenv()
+# Read the secret settings from the .env file next to this one
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 
