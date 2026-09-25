@@ -1,3 +1,7 @@
+import { useState } from "react";
+import SourceBadge, { SourceDetails } from "@/components/SourceBadge";
+import type { FieldSource } from "@/lib/types";
+
 type NumberFieldProps = {
   id: string;
   label: string;
@@ -9,20 +13,30 @@ type NumberFieldProps = {
   /** Blank is allowed (it means "not entered") */
   optional?: boolean;
   type?: "number" | "text";
+  /** Where an auto-filled value came from */
+  source?: FieldSource;
+  onConfirm?: () => void;
 };
 
 export default function NumberField({
-  id, label, value, onChange, prefix, suffix, hint, optional = false, type = "number",
+  id, label, value, onChange, prefix, suffix, hint, optional = false, type = "number", source, onConfirm,
 }: NumberFieldProps) {
+  const [showSource, setShowSource] = useState(false);
   const isEmpty = value.trim() === "";
   const isInvalid = isEmpty && !optional;
   const hintId = hint ? `${id}-hint` : undefined;
+  const sourceId = `${id}-source`;
 
   return (
     <div className="min-w-0">
-      <label htmlFor={id} className="block text-body text-ink-soft">
-        {label}
-      </label>
+      <div className="flex items-start justify-between gap-2">
+        <label htmlFor={id} className="block text-body text-ink-soft">
+          {label}
+        </label>
+        {source && (
+          <SourceBadge source={source} open={showSource} onToggle={() => setShowSource(!showSource)} controls={sourceId} />
+        )}
+      </div>
       <div
         className={`mt-1.5 flex items-center rounded-md border bg-white transition-colors focus-within:border-ink focus-within:ring-2 focus-within:ring-ink/15 ${
           isInvalid ? "border-loss" : "border-rule"
@@ -48,6 +62,16 @@ export default function NumberField({
         <p id={hintId} className="mt-1 text-caption text-ink-soft">
           {hint}
         </p>
+      )}
+      {source && showSource && (
+        <SourceDetails
+          id={sourceId}
+          source={source}
+          onConfirm={onConfirm && (() => {
+            onConfirm();
+            setShowSource(false);
+          })}
+        />
       )}
     </div>
   );

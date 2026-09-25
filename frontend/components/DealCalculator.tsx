@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import CompanyLookup from "@/components/CompanyLookup";
 import CreditPanel from "@/components/CreditPanel";
 import DealForm from "@/components/DealForm";
 import EpsBridge from "@/components/EpsBridge";
@@ -18,8 +19,9 @@ import YearStrip from "@/components/YearStrip";
 import {
   calculateDeal, calculateSensitivity, deleteDeal, downloadExcel, getDeal, listDeals, saveDeal,
 } from "@/lib/api";
+import { confirmField, markEdited } from "@/lib/companyData";
 import {
-  DEFAULT_DEAL_NAME, DEFAULT_FORM, YEARS, applyValueEdit, buildDealInput, formFromInputs, switchMode,
+  DEFAULT_DEAL_NAME, DEFAULT_FORM, YEARS, applyValueEdit, buildDealInput, dataSources, formFromInputs, switchMode,
   type FormState, type TrancheText,
 } from "@/lib/dealForm";
 import type { AxisKey, Currency, DealInput, DealResults, Mode, SavedDealSummary, Sensitivity } from "@/lib/types";
@@ -136,15 +138,21 @@ export default function DealCalculator() {
   }
 
   function updateValue(path: string, text: string) {
-    setForm((current) => applyValueEdit(current, path, text));
+    // Typing the premium sets the offer price, so that counts as an edit to it too
+    const edited = path === "offer.premium" ? [path, "offer.offer_price"] : [path];
+    setForm((current) => markEdited(applyValueEdit(current, path, text), edited));
   }
 
   function updateSchedule(path: string, yearIndex: number | "all", text: string) {
     setForm((current) => {
       const updated = yearIndex === "all" ? Array(YEARS).fill(text) : [...current.schedules[path]];
       if (yearIndex !== "all") updated[yearIndex] = text;
-      return { ...current, schedules: { ...current.schedules, [path]: updated } };
+      return markEdited({ ...current, schedules: { ...current.schedules, [path]: updated } }, [path]);
     });
+  }
+
+  function confirmSource(path: string) {
+    setForm((current) => confirmField(current, path));
   }
 
   function updateChoice(path: string, value: string) {
@@ -178,7 +186,7 @@ export default function DealCalculator() {
     if (input === null || dealName.trim() === "") return;
     setIsSaving(true);
     try {
-      const saved = await saveDeal(dealName.trim(), input);
+      const saved = await saveDeal(dealName.trim(), { ...input, data_sources: dataSources(form) });
       showNotice(`Saved "${saved.name}"`);
       setSavedDeals(await listDeals());
     } catch (err) {
@@ -272,8 +280,11 @@ export default function DealCalculator() {
             </div>
           </div>
 
+          <CompanyLookup form={form} onApply={setForm} />
+
           <DealForm
             state={form}
+            onConfirmSource={confirmSource}
             onValueChange={updateValue}
             onScheduleChange={updateSchedule}
             onChoiceChange={updateChoice}

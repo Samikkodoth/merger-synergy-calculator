@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import SourceBadge, { SourceDetails } from "@/components/SourceBadge";
 import { sumOfTexts } from "@/lib/dealForm";
+import type { FieldSource } from "@/lib/types";
 
 type ScheduleInputProps = {
   id: string;
@@ -12,6 +14,8 @@ type ScheduleInputProps = {
   mustTotal100?: boolean;
   oneRate?: boolean;
   optional?: boolean;
+  source?: FieldSource;
+  onConfirm?: () => void;
 };
 
 export function TotalCheck({ total, what }: { total: number | null; what: string }) {
@@ -31,8 +35,9 @@ const inputClass =
 
 /** Five yearly percentages. "One rate" schedules show a single box until expanded. */
 export default function ScheduleInput({
-  id, label, texts, onChange, hint, mustTotal100, oneRate, optional,
+  id, label, texts, onChange, hint, mustTotal100, oneRate, optional, source, onConfirm,
 }: ScheduleInputProps) {
+  const [showSource, setShowSource] = useState(false);
   const allSame = texts.every((text) => text === texts[0]);
   const [expanded, setExpanded] = useState(!oneRate || !allSame);
   const isBlank = (text: string) => text.trim() === "" && !optional;
@@ -40,9 +45,19 @@ export default function ScheduleInput({
   return (
     <div className="col-span-2">
       <div className="flex items-baseline justify-between gap-2">
-        <p id={`${id}-label`} className="text-body text-ink-soft">
-          {label}
-        </p>
+        <div className="flex items-start gap-2">
+          <p id={`${id}-label`} className="text-body text-ink-soft">
+            {label}
+          </p>
+          {source && (
+            <SourceBadge
+              source={source}
+              open={showSource}
+              onToggle={() => setShowSource(!showSource)}
+              controls={`${id}-source`}
+            />
+          )}
+        </div>
         {oneRate && (
           <button
             type="button"
@@ -95,6 +110,16 @@ export default function ScheduleInput({
       )}
       {hint && <p className="mt-1 text-caption text-ink-soft">{hint}</p>}
       {mustTotal100 && <TotalCheck total={sumOfTexts(texts)} what="The yearly amounts" />}
+      {source && showSource && (
+        <SourceDetails
+          id={`${id}-source`}
+          source={source}
+          onConfirm={onConfirm && (() => {
+            onConfirm();
+            setShowSource(false);
+          })}
+        />
+      )}
     </div>
   );
 }

@@ -1,4 +1,6 @@
-import type { AxisKey, DealInput, DealResults, SavedDeal, SavedDealSummary, Sensitivity } from "@/lib/types";
+import type {
+  AxisKey, CompanyProfile, DataStatus, DealInput, DealResults, PriceLookup, SavedDeal, SavedDealSummary, Sensitivity,
+} from "@/lib/types";
 
 const configuredUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 export const API_URL = configuredUrl.endsWith("/") ? configuredUrl.slice(0, -1) : configuredUrl;
@@ -81,4 +83,20 @@ export function getDeal(id: number) {
 
 export function deleteDeal(id: number) {
   return request<{ deleted: number }>(`/deals/${id}`, { method: "DELETE" });
+}
+
+// ---------------------------------------------------------------- Company data
+
+export function getDataStatus() {
+  return request<DataStatus>("/company-data/status");
+}
+
+export function getCompany(ticker: string) {
+  return request<CompanyProfile>(`/company/${encodeURIComponent(ticker.trim())}`);
+}
+
+/** Latest close, plus the last close before the announcement date. */
+export function getPrices(ticker: string, announced: string) {
+  const query = announced ? `?announced=${encodeURIComponent(announced)}` : "";
+  return request<PriceLookup>(`/price/${encodeURIComponent(ticker.trim())}${query}`);
 }

@@ -91,6 +91,8 @@ export type DealInput = {
   };
   thresholds: { max_leverage: number; min_coverage: number };
   valuation: { discount_rate: number; terminal_growth: number };
+  /** Where auto-filled numbers came from. Saved with the deal; the maths ignores it. */
+  data_sources?: DataSources;
 };
 
 export type Issue = {
@@ -283,3 +285,94 @@ export type SavedDeal = SavedDealSummary & {
   inputs: DealInput;
   results: DealResults;
 };
+
+// ---------------------------------------------------------------- Company data (SEC filings and prices)
+
+export type Basis = "ttm" | "fy";
+
+/** One fact from a filing that a number was built from. */
+export type SourcePeriod = {
+  role: string;
+  tag: string;
+  value: number;
+  start: string | null;
+  end: string;
+  form: string | null;
+  filed: string | null;
+  accession: string;
+  url: string;
+};
+
+export type CompanyField = {
+  value: number | null;
+  tags: string[];
+  periods: SourcePeriod[];
+  reason?: string;
+  note?: string;
+  as_of?: string;
+};
+
+export type Growth = {
+  value: number | null;
+  reason?: string;
+  years?: number;
+  from?: { end: string; value: number; tag: string };
+  to?: { end: string; value: number; tag: string };
+};
+
+export type CompanyIssue = Issue & { basis: Basis | null };
+
+export type CompanyProfile = {
+  ticker: string;
+  cik: string;
+  name: string;
+  industry: string | null;
+  bases: Record<Basis, string>;
+  balance_date: string | null;
+  fields: Record<string, Record<Basis, CompanyField>>;
+  growth: { revenue: Growth; net_income: Growth };
+  warnings: CompanyIssue[];
+  share_classes: string[];
+  fetched_at?: string;
+};
+
+export type PriceLookup =
+  | { available: false; message: string }
+  | {
+      available: true;
+      source: string;
+      ticker: string;
+      current: { price: number; date: string };
+      unaffected: {
+        price: number;
+        date: string;
+        announced: string;
+        raw_close: number;
+        split_factor: number;
+        note: string | null;
+      } | null;
+      unaffected_message?: string;
+    };
+
+export type DataStatus = { sec: boolean; prices: boolean; prices_message: string | null };
+
+/** "auto": filled from a filing or price, not yet checked. "todo": no free source, so the user fills it. */
+export type FieldStatus = "auto" | "confirmed" | "manual" | "missing" | "todo";
+
+export type FieldSource = {
+  status: FieldStatus;
+  /** e.g. "Apple Inc. (AAPL)" */
+  company?: string;
+  /** e.g. "Twelve months to 2026-06-27" */
+  basisLabel?: string;
+  /** What the source said, in API units, to compare after a manual edit */
+  value?: number;
+  kind?: "amount" | "shares" | "price" | "percent";
+  periods?: SourcePeriod[];
+  note?: string;
+  reason?: string;
+};
+
+export type Lookup = { acquirer: string; target: string; announced: string; basis: Basis };
+
+export type DataSources = { lookup?: Lookup; fields?: Record<string, FieldSource> };

@@ -5,8 +5,9 @@ import NumberField from "@/components/NumberField";
 import ScheduleInput, { TotalCheck } from "@/components/ScheduleInput";
 import SelectField from "@/components/SelectField";
 import TranchesEditor from "@/components/TranchesEditor";
+import { needsAttention } from "@/lib/companyData";
 import {
-  TABS, isVisible, kindOf, sumOfTexts, unitSuffix,
+  TABS, isVisible, kindOf, sumOfTexts, tabPaths, unitSuffix,
   type FormState, type Item, type TrancheText,
 } from "@/lib/dealForm";
 import type { Currency, Mode } from "@/lib/types";
@@ -19,6 +20,7 @@ type DealFormProps = {
   onTranchesChange: (tranches: TrancheText[]) => void;
   onModeChange: (mode: Mode) => void;
   onCurrencyChange: (currency: Currency) => void;
+  onConfirmSource: (path: string) => void;
 };
 
 function ModeSwitch({ mode, onChange }: { mode: Mode; onChange: (mode: Mode) => void }) {
@@ -46,7 +48,10 @@ function ModeSwitch({ mode, onChange }: { mode: Mode; onChange: (mode: Mode) => 
 }
 
 export default function DealForm(props: DealFormProps) {
-  const { state, onValueChange, onScheduleChange, onChoiceChange, onTranchesChange, onModeChange, onCurrencyChange } = props;
+  const {
+    state, onValueChange, onScheduleChange, onChoiceChange, onTranchesChange, onModeChange, onCurrencyChange,
+    onConfirmSource,
+  } = props;
   const { mode, currency } = state;
   const tabs = TABS.filter((tab) => isVisible(tab, mode));
   const [tabId, setTabId] = useState(tabs[0].id);
@@ -66,6 +71,8 @@ export default function DealForm(props: DealFormProps) {
             optional={item.optional}
             value={state.values[item.path] ?? ""}
             onChange={(text) => onValueChange(item.path, text)}
+            source={state.sources[item.path]}
+            onConfirm={() => onConfirmSource(item.path)}
             {...unitSuffix(kind, currency)}
           />
         );
@@ -82,6 +89,8 @@ export default function DealForm(props: DealFormProps) {
             optional={item.optional}
             texts={state.schedules[item.path]}
             onChange={(yearIndex, text) => onScheduleChange(item.path, yearIndex, text)}
+            source={state.sources[item.path]}
+            onConfirm={() => onConfirmSource(item.path)}
           />
         );
       case "choice":
@@ -107,6 +116,7 @@ export default function DealForm(props: DealFormProps) {
               label="Offer price"
               value={state.values["offer.offer_price"] ?? ""}
               onChange={(text) => onValueChange("offer.offer_price", text)}
+              source={state.sources["offer.offer_price"]}
               {...unitSuffix("price", currency)}
             />
             <NumberField
@@ -165,6 +175,7 @@ export default function DealForm(props: DealFormProps) {
       <div role="tablist" aria-label="Input sections" className="-mx-1 flex gap-1 overflow-x-auto border-b border-rule">
         {tabs.map((tab) => {
           const selected = tab.id === activeTab.id;
+          const attention = tabPaths(tab).some((path) => needsAttention(state.sources[path]));
           return (
             <button
               key={tab.id}
@@ -174,11 +185,17 @@ export default function DealForm(props: DealFormProps) {
               aria-selected={selected}
               aria-controls={`panel-${tab.id}`}
               onClick={() => setTabId(tab.id)}
-              className={`-mb-px cursor-pointer border-b-2 px-2 py-2 text-body font-semibold whitespace-nowrap ${
+              className={`relative -mb-px cursor-pointer border-b-2 px-2 py-2 text-body font-semibold whitespace-nowrap ${
                 selected ? "border-ink text-ink" : "border-transparent text-ink-soft hover:text-ink"
               }`}
             >
               {tab.title}
+              {attention && (
+                <>
+                  <span aria-hidden="true" className="ml-1 inline-block size-1.5 rounded-full bg-brass align-middle" />
+                  <span className="sr-only"> (has fields to check)</span>
+                </>
+              )}
             </button>
           );
         })}

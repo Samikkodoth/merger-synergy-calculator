@@ -6,7 +6,7 @@
 // percentages as 0-100.
 
 import { CURRENCY } from "@/lib/format";
-import type { Currency, DealInput, Mode, Tranche } from "@/lib/types";
+import type { Currency, DataSources, DealInput, FieldSource, Lookup, Mode, Tranche } from "@/lib/types";
 
 export const YEARS = 5;
 
@@ -68,7 +68,13 @@ export type FormState = {
   schedules: Record<string, string[]>;
   choices: Record<string, string>;
   tranches: TrancheText[];
+  /** Where auto-filled values came from, and whether they've been checked (see companyData.ts) */
+  sources: Record<string, FieldSource>;
+  /** The last company lookup: tickers, announcement date and basis */
+  lookup: Lookup;
 };
+
+export const DEFAULT_LOOKUP: Lookup = { acquirer: "", target: "", announced: "", basis: "ttm" };
 
 // ---------------------------------------------------------------- Field list
 
@@ -509,7 +515,24 @@ export function formFromInputs(input: DealInput): FormState {
     fee_pct: fromApiNumber(t.fee_pct, "percent", currency),
   }));
 
-  return { mode: input.mode, currency, values, schedules, choices, tranches };
+  const sources = input.data_sources?.fields ?? {};
+  const lookup = { ...DEFAULT_LOOKUP, ...input.data_sources?.lookup };
+  return { mode: input.mode, currency, values, schedules, choices, tranches, sources, lookup };
+}
+
+/** What gets saved with the deal about auto-filled data (nothing if no lookup was made). */
+export function dataSources(state: FormState): DataSources {
+  if (Object.keys(state.sources).length === 0) return {};
+  return { lookup: state.lookup, fields: state.sources };
+}
+
+/** Every input path shown on a tab, to mark tabs that hold fields needing a look. */
+export function tabPaths(tab: Tab): string[] {
+  return tab.groups.flatMap((group) => group.items.flatMap((item) => {
+    if (item.type === "field" || item.type === "schedule" || item.type === "choice") return [item.path];
+    if (item.type === "premium") return ["offer.offer_price"];
+    return [];
+  }));
 }
 
 // ---------------------------------------------------------------- Edits
@@ -659,6 +682,8 @@ export const DEFAULT_FORM: FormState = {
   tranches: [
     { name: "Term loan", amount: "150", rate: "7", term_years: "5", amortization_pct: "0", fee_pct: "1" },
   ],
+  sources: {},
+  lookup: DEFAULT_LOOKUP,
 };
 
 export const EMPTY_TRANCHE: TrancheText = {
