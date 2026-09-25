@@ -1,16 +1,29 @@
 # main.py
 # The API: lets other programs (like our website) use the calculator.
 import os
-from fastapi import FastAPI, HTTPException
+from contextlib import asynccontextmanager
+from typing import Any, Literal
+
+from fastapi import Body, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from fastapi.responses import Response
+from pydantic import BaseModel, Field, ValidationError
 
 import database
-from calculator import calculate_deal
+from model.engine import run_model
+from model.legacy import parse_deal
+from model.sensitivity import AXES, run_sensitivity
 
-app = FastAPI(title="Merger Synergy Calculator API")
 
-# Allow our future Next.js website (at localhost:3000) to call this API
+@asynccontextmanager
+async def lifespan(app):
+    # Make sure the deals table exists when the server starts
+    database.create_table()
+    yield
+
+
+app = FastAPI(title="Merger Synergy Calculator API", lifespan=lifespan)
+
 # Which websites may call this API. Online, this is set on the hosting service.
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
 
@@ -21,45 +34,37 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Make sure the deals table exists when the server starts
-database.create_table()
+Axis = Literal[tuple(AXES)]
 
 
-class DealInput(BaseModel):
-    # The acquirer
-    acquirer_net_income: float
-    acquirer_shares: float = Field(gt=0)
-    acquirer_share_price: float = Field(gt=0)
-    # The target and the price
-    target_net_income: float
-    purchase_price: float = Field(gt=0)
-    tax_rate: float = Field(ge=0, le=1)
-    # How the deal is paid for
-    pct_stock: float = Field(ge=0, le=1)
-    pct_cash: float = Field(ge=0, le=1)
-    pct_debt: float = Field(ge=0, le=1)
-    interest_rate_on_cash: float = Field(ge=0, le=1)
-    interest_rate_on_debt: float = Field(ge=0, le=1)
-    # Cost synergies
-    cost_synergies: float = Field(ge=0)
-    cost_synergy_phase_in: list[float]
-    # Revenue synergies
-    revenue_synergies: float = Field(ge=0)
-    revenue_synergy_margin: float = Field(ge=0, le=1)
-    revenue_synergy_phase_in: list[float]
-    # Integration costs
-    integration_costs: float = Field(ge=0)
-    integration_cost_schedule: list[float]
+class SensitivityRequest(BaseModel):
+    inputs: dict[str, Any]
+    x_axis: Axis = "price"
+    y_axis: Axis = "synergies"
 
 
 class SaveDealRequest(BaseModel):
     name: str = Field(min_length=1, max_length=200)
-    inputs: DealInput
+    inputs: dict[str, Any]
 
 
-def run_calculation(inputs):
+def readable(error: ValidationError) -> str:
+    first = error.errors()[0]
+    where = ".".join(str(part) for part in first["loc"])
+    return f"{where}: {first['msg']}" if where else first["msg"]
+
+
+def load_deal(data):
+    """Parse either input format; bad inputs become a 422 with a readable message."""
     try:
-        return calculate_deal(**inputs)
+        return parse_deal(data)
+    except ValidationError as error:
+        raise HTTPException(status_code=422, detail=readable(error))
+
+
+def run_or_400(function, *args):
+    try:
+        return function(*args)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))
 
@@ -70,15 +75,28 @@ def health_check():
 
 
 @app.post("/calculate")
-def calculate(deal: DealInput):
-    return run_calculation(deal.model_dump())
+def calculate(inputs: dict[str, Any] = Body(...)):
+    return run_or_400(run_model, load_deal(inputs))
+
+
+@app.post("/sensitivity")
+def sensitivity(body: dict[str, Any] = Body(...)):
+    # The original app posted the deal itself; that still works (price x synergies).
+    if "inputs" not in body:
+        body = {"inputs": body}
+    try:
+        request = SensitivityRequest.model_validate(body)
+    except ValidationError as error:
+        raise HTTPException(status_code=422, detail=readable(error))
+    deal = load_deal(request.inputs)
+    return run_or_400(run_sensitivity, deal, request.x_axis, request.y_axis)
 
 
 @app.post("/deals")
 def save_new_deal(request: SaveDealRequest):
-    inputs = request.inputs.model_dump()
-    results = run_calculation(inputs)
-    saved = database.save_deal(request.name, inputs, results)
+    deal = load_deal(request.inputs)
+    results = run_or_400(run_model, deal)
+    saved = database.save_deal(request.name, deal.model_dump(), results, 2, deal.currency)
     return {
         "id": saved["id"],
         "name": saved["name"],
@@ -94,10 +112,20 @@ def get_all_deals():
 
 @app.get("/deals/{deal_id}")
 def get_one_deal(deal_id: int):
-    deal = database.get_deal(deal_id)
-    if deal is None:
+    saved = database.get_deal(deal_id)
+    if saved is None:
         raise HTTPException(status_code=404, detail="Deal not found")
-    return deal
+    # Old deals are converted to the new format (simple mode) and recalculated,
+    # so the results always have the current shape.
+    deal = load_deal(saved["inputs"])
+    return {
+        "id": saved["id"],
+        "name": saved["name"],
+        "created_at": saved["created_at"],
+        "currency": deal.currency,
+        "inputs": deal.model_dump(),
+        "results": run_or_400(run_model, deal),
+    }
 
 
 @app.delete("/deals/{deal_id}")
@@ -105,31 +133,3 @@ def remove_deal(deal_id: int):
     if not database.delete_deal(deal_id):
         raise HTTPException(status_code=404, detail="Deal not found")
     return {"deleted": deal_id}
-
-PRICE_CHANGES = [-0.20, -0.10, 0.0, 0.10, 0.20]
-SYNERGY_CHANGES = [0.50, 0.25, 0.0, -0.25, -0.50]
-
-
-@app.post("/sensitivity")
-def sensitivity(deal: DealInput):
-    base = deal.model_dump()
-    grid = []
-
-    for synergy_change in SYNERGY_CHANGES:
-        row = []
-        for price_change in PRICE_CHANGES:
-            scenario = {
-                **base,
-                "purchase_price": base["purchase_price"] * (1 + price_change),
-                "cost_synergies": base["cost_synergies"] * (1 + synergy_change),
-                "revenue_synergies": base["revenue_synergies"] * (1 + synergy_change),
-            }
-            results = run_calculation(scenario)
-            row.append([year["accretion_pct"] for year in results["years"]])
-        grid.append(row)
-
-    return {
-        "price_changes": PRICE_CHANGES,
-        "synergy_changes": SYNERGY_CHANGES,
-        "accretion": grid,
-    }

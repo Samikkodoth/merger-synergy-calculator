@@ -28,31 +28,37 @@ def create_table():
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
         """)
+        # Added for model version 2. Existing deals get version 1 and USD.
+        conn.execute("ALTER TABLE deals ADD COLUMN IF NOT EXISTS model_version INTEGER NOT NULL DEFAULT 1")
+        conn.execute("ALTER TABLE deals ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'USD'")
 
 
-def save_deal(name, inputs, results):
+def save_deal(name, inputs, results, model_version=2, currency="USD"):
     with get_connection() as conn:
         return conn.execute(
             """
-            INSERT INTO deals (name, inputs, results)
-            VALUES (%s, %s, %s)
+            INSERT INTO deals (name, inputs, results, model_version, currency)
+            VALUES (%s, %s, %s, %s, %s)
             RETURNING id, name, created_at
             """,
-            (name, Jsonb(inputs), Jsonb(results)),
+            (name, Jsonb(inputs), Jsonb(results), model_version, currency),
         ).fetchone()
 
 
 def list_deals():
     with get_connection() as conn:
         return conn.execute(
-            "SELECT id, name, created_at FROM deals ORDER BY created_at DESC"
+            "SELECT id, name, currency, created_at FROM deals ORDER BY created_at DESC"
         ).fetchall()
 
 
 def get_deal(deal_id):
     with get_connection() as conn:
         return conn.execute(
-            "SELECT id, name, inputs, results, created_at FROM deals WHERE id = %s",
+            """
+            SELECT id, name, inputs, results, model_version, currency, created_at
+            FROM deals WHERE id = %s
+            """,
             (deal_id,),
         ).fetchone()
 
