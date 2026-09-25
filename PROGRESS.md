@@ -5,9 +5,9 @@ Tracks the upgrade described in `UPGRADE_PLAN.md`. All work is on the `ib-upgrad
 
 | Phase | Status |
 |---|---|
-| 1. Finance model | **Done**, awaiting browser testing and approval to merge |
-| 2. Automatic company data (SEC EDGAR) | **Done**, awaiting browser testing and approval |
-| 3. Recent deals discovery | Not started |
+| 1. Finance model | **Done**, merged to `main` |
+| 2. Automatic company data (SEC EDGAR) | **Done**, tested and merged to `main` |
+| 3. Recent deals discovery | Not planned for now (decided after Phase 2) |
 
 ## Phase 1: finance model
 
@@ -249,6 +249,7 @@ Sources are saved with deals.
     share prices marked "You fill this". With the key (optional): prices fill in.
 11. Phone width: no sideways scrolling.
 
-## Phase 3: next
+## Phase 3: not planned for now
 
-Not started.
+After Phase 2 it was decided not to build the recent deals discovery for now. The plan for it
+remains in `UPGRADE_PLAN.md` section 5.
