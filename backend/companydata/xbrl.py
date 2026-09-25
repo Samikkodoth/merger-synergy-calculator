@@ -12,7 +12,7 @@
 from datetime import date, timedelta
 
 # Bump when the output shape or the rules change, so cached results are rebuilt.
-PARSER_VERSION = 1
+PARSER_VERSION = 2
 
 
 def one(tag):
@@ -288,10 +288,29 @@ def missing(reason):
     return {"value": None, "tags": [], "periods": [], "reason": reason}
 
 
+# Items that can't be negative. A negative value usually means the company
+# flipped the sign in one filing, so that tag isn't trusted.
+NON_NEGATIVE = {"revenue", "d_and_a", "interest_expense", "diluted_shares"}
+
+
 def flow_field(facts, name, basis, annual, quarterly, unit="USD", options=None):
     options = options or FLOW_FIELDS[name]
-    found = pick(options, lambda tag: flow_value(facts, tag, unit, basis, annual, quarterly))
-    return found or missing(f"No {LABELS[name].lower()} found for this period in the filings")
+    rejected = []
+
+    def lookup(tag):
+        result = flow_value(facts, tag, unit, basis, annual, quarterly)
+        if result is not None and name in NON_NEGATIVE and any(p["value"] < 0 for p in result[1]):
+            rejected.append(tag)
+            return None
+        return result
+
+    found = pick(options, lookup)
+    if found:
+        return found
+    if rejected:
+        return missing(f"{LABELS[name]} is negative in at least one filing ({', '.join(rejected)}), "
+                       "which suggests the sign differs between filings")
+    return missing(f"No {LABELS[name].lower()} found for this period in the filings")
 
 
 def balance_field(facts, name, options, filing):

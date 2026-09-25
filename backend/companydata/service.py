@@ -98,8 +98,9 @@ class CompanyData:
             profile = self.fetch_company(symbol, company["cik"])
             profile["fetched_at"] = datetime.now(timezone.utc).isoformat()
             self.cache.put(key, profile)
-        # The ticker typed may be another share class of the same company
-        profile = {**profile, "ticker": symbol}
+        # The ticker typed may be one of several share classes of the same company
+        classes = sorted(t for t, c in self.tickers().items() if c["cik"] == company["cik"])
+        profile = {**profile, "ticker": symbol, "share_classes": classes}
         # Worked out on every request, so "out of date" is judged against today
         return {**profile, "warnings": checks.review(profile, today)}
 

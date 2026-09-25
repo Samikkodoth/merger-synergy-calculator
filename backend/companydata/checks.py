@@ -74,6 +74,24 @@ def unusual_numbers(profile):
     return found
 
 
+def share_checks(profile):
+    found = []
+    classes = profile.get("share_classes") or []
+    if len(classes) > 1:
+        found.append(issue("warning", "share_classes",
+                           f"Several tickers are listed for this company ({', '.join(classes)}). If it has more "
+                           "than one class of common shares, the share count and price may cover only one "
+                           "class: check the filing."))
+    cover = profile["fields"]["shares_outstanding"]["ttm"]["value"]
+    for basis in BASES:
+        diluted = value(profile, "diluted_shares", basis)
+        if cover and diluted and abs(cover / diluted - 1) > 0.25:
+            found.append(issue("warning", "shares_mismatch",
+                               "Shares outstanding on the cover page differ by more than 25% from the weighted "
+                               "average diluted count. Check for share classes, splits or large buybacks.", basis))
+    return found
+
+
 def review(profile, today=None):
     """All the warnings for one company."""
     today = today or date.today()
@@ -92,6 +110,7 @@ def review(profile, today=None):
                            "don't mean what they do for other companies. Treat those figures with care."))
 
     found.extend(unusual_numbers(profile))
+    found.extend(share_checks(profile))
 
     for name, growth in profile["growth"].items():
         if growth["value"] is None:

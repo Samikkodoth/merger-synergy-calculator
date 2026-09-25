@@ -315,3 +315,27 @@ def test_figures_not_in_usd_are_not_supported():
     facts["facts"]["us-gaap"]["NetIncomeLoss"]["units"] = {"EUR": year(10)}
     with pytest.raises(UnsupportedCompany, match="EUR"):
         parse_company(facts, submissions, "TEST")
+
+
+def test_a_negative_expense_is_not_trusted_and_the_next_tag_is_tried():
+    # Like Disney: InterestExpense is negative in the 10-K, so InterestExpenseNonoperating is used
+    gaap = {"NetIncomeLoss": year(10), "InterestExpense": year(-18), "InterestExpenseNonoperating": year(18)}
+    interest = parse_company(*made_up(gaap), "TEST")["fields"]["interest_expense"]["fy"]
+    assert interest["value"] == 18
+    assert interest["tags"] == ["InterestExpenseNonoperating"]
+
+
+def test_a_negative_expense_with_no_other_tag_is_missing_with_the_reason():
+    gaap = {"NetIncomeLoss": year(10), "InterestExpense": year(-18)}
+    interest = parse_company(*made_up(gaap), "TEST")["fields"]["interest_expense"]["fy"]
+    assert interest["value"] is None
+    assert "negative in at least one filing (InterestExpense)" in interest["reason"]
+
+
+def test_several_share_classes_are_flagged():
+    gaap = {"NetIncomeLoss": year(10), "WeightedAverageNumberOfDilutedSharesOutstanding": year(100)}
+    # Cover page 60 vs diluted 100: 40% apart
+    profile = parse_company(*made_up(gaap, dei=[fact(60, "2026-01-20", K)]), "TEST")
+    profile["share_classes"] = ["TEST-A", "TEST-B"]
+    codes = {w["code"] for w in review(profile, date(2026, 3, 1))}
+    assert {"share_classes", "shares_mismatch"} <= codes
